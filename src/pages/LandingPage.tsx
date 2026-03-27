@@ -90,21 +90,40 @@ export function LandingPage () {
             {/* Mockup */}
             <div className="relative rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 shadow-2xl shadow-black/50">
               <div className="mb-3 flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
-                <div className="h-2 w-24 rounded bg-zinc-700" />
-                <div className="h-2 w-16 rounded bg-slab-teal/40" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slab-teal-light">Featured Slabs</p>
+                  <p className="text-[11px] text-[var(--slab-text-muted)]">Live values + AI notes</p>
+                </div>
+                <div className="rounded-full bg-slab-teal/15 px-2 py-1 text-[10px] font-medium text-slab-teal-light">+$1,248</div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="rounded-lg bg-[var(--color-surface)] p-3">
-                    <div className="h-2 w-full rounded bg-zinc-700" />
-                    <div className="mt-2 h-8 rounded bg-zinc-800" />
-                    <div className="mt-2 h-2 w-2/3 rounded bg-slab-teal/30" />
+
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { name: 'Michael Jordan', set: '1986 Fleer', grade: 'PSA 9', value: '$18,500' },
+                  { name: 'Tom Brady', set: '2000 Bowman', grade: 'BGS 9', value: '$6,200' },
+                  { name: 'Shohei Ohtani', set: '2018 Topps', grade: 'PSA 10', value: '$3,950' },
+                ].map((card) => (
+                  <div
+                    key={card.name}
+                    className="rounded-xl border border-slab-teal/30 bg-[linear-gradient(180deg,#1A1F27_0%,#101318_100%)] p-2.5 shadow-lg shadow-black/30"
+                  >
+                    <div className="rounded-md border border-zinc-700/70 bg-zinc-900/80 p-1.5 text-[10px] text-zinc-200">
+                      <p className="truncate font-semibold">{card.name}</p>
+                      <p className="truncate text-zinc-400">{card.set}</p>
+                    </div>
+                    <div className="mt-2 rounded-md bg-slab-teal/15 px-1.5 py-1 text-[10px] text-slab-teal-light">
+                      {card.grade}
+                    </div>
+                    <p className="mt-1.5 text-[11px] font-semibold text-white">{card.value}</p>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 space-y-2">
-                <div className="h-2 w-full rounded bg-zinc-800" />
-                <div className="h-2 w-4/5 rounded bg-zinc-800" />
+
+              <div className="mt-4 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-3">
+                <p className="text-xs text-[var(--slab-text-muted)]">AI Insight</p>
+                <p className="mt-1 text-xs text-[var(--slab-text)]">
+                  Jordan + Brady are up 6.2% this week. Ohtani volume is rising with strong sold comps.
+                </p>
               </div>
             </div>
           </div>
