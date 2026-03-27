@@ -86,6 +86,14 @@ export function DashboardLayout () {
       </nav>
       <div className="border-t border-[var(--color-border-subtle)] p-4">
         <p className="truncate text-xs text-zinc-500">{user?.email}</p>
+        {import.meta.env.VITE_GIT_SHA ? (
+          <p className="mt-2 font-mono text-[10px] text-zinc-600" title="Vercel build commit">
+            Build {import.meta.env.VITE_GIT_SHA.slice(0, 7)}
+            {import.meta.env.VITE_VERCEL_ENV
+              ? ` · ${import.meta.env.VITE_VERCEL_ENV}`
+              : ''}
+          </p>
+        ) : null}
         <button
           type="button"
           onClick={handleSignOut}
