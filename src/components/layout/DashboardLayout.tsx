@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { supabase } from '../../lib/supabase'
 import { SlabBookLogo } from '../SlabBookLogo'
 
 const nav = [
@@ -50,6 +51,34 @@ export function DashboardLayout () {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user) {
+      const clear = window.setTimeout(() => setSubscriptionTier(null), 0)
+      return () => window.clearTimeout(clear)
+    }
+
+    if (!user.id) {
+      return
+    }
+
+    let active = true
+    void (async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('subscription_tier')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (!active) return
+      const tier = typeof data?.subscription_tier === 'string' ? data.subscription_tier : null
+      setSubscriptionTier(tier)
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [user])
 
   async function handleSignOut () {
     await signOut()
@@ -89,6 +118,13 @@ export function DashboardLayout () {
       </nav>
       <div className="border-t border-[var(--color-border-subtle)] p-4">
         <p className="truncate text-xs text-zinc-500">{user?.email}</p>
+        {subscriptionTier && (
+          <p className="mt-2">
+            <span className="inline-flex items-center rounded-full border border-slab-teal/40 bg-slab-teal/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slab-teal-light">
+              Plan: {subscriptionTier}
+            </span>
+          </p>
+        )}
         {import.meta.env.VITE_GIT_SHA ? (
           <p className="mt-2 font-mono text-[10px] text-zinc-600" title="Vercel build commit">
             Build {import.meta.env.VITE_GIT_SHA.slice(0, 7)}
