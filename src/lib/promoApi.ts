@@ -21,11 +21,27 @@ export async function validatePromoRequest (
         user_id: opts?.userId ?? undefined,
       }),
     })
-    const data = (await res.json()) as ValidatePromoResponse
-    if (!res.ok && 'error' in data) {
-      return { valid: false, error: data.error }
+
+    const raw = await res.text()
+    let data: unknown = null
+    try {
+      data = raw ? JSON.parse(raw) : null
+    } catch {
+      data = null
     }
-    return data
+
+    if (!data || typeof data !== 'object') {
+      return {
+        valid: false,
+        error: `Promo endpoint error (${res.status}).`,
+      }
+    }
+
+    const parsed = data as ValidatePromoResponse
+    if (!res.ok && 'error' in parsed) {
+      return { valid: false, error: parsed.error }
+    }
+    return parsed
   } catch {
     return { valid: false, error: 'Promo service unavailable. Try again shortly.' }
   }
@@ -45,7 +61,15 @@ export async function redeemPromoRequest (
       },
       body: JSON.stringify({ code, tier }),
     })
-    const data = (await res.json()) as { ok?: boolean; error?: string; message?: string }
+
+    const raw = await res.text()
+    let data: { ok?: boolean; error?: string; message?: string } = {}
+    try {
+      data = raw ? (JSON.parse(raw) as { ok?: boolean; error?: string; message?: string }) : {}
+    } catch {
+      data = { error: `Redeem endpoint error (${res.status}).` }
+    }
+
     if (!res.ok) return { error: data.error ?? 'Redeem failed' }
     return data
   } catch {
