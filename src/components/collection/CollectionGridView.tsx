@@ -63,7 +63,7 @@ export function CollectionGridView ({
               </div>
               <div>
                 <dt className="text-xs text-zinc-500">Value</dt>
-                <dd className="mt-0.5 tabular-nums text-emerald-300">
+                <dd className="mt-0.5 tabular-nums text-slab-teal-light">
                   {c.current_value != null ? money.format(Number(c.current_value)) : '—'}
                 </dd>
               </div>
@@ -78,7 +78,7 @@ export function CollectionGridView ({
                         <span
                           className={[
                             'tabular-nums font-medium',
-                            gainPositive ? 'text-emerald-400' : 'text-red-400',
+                            gainPositive ? 'text-slab-teal' : 'text-red-400',
                           ].join(' ')}
                         >
                           {d >= 0 ? '+' : ''}
@@ -100,7 +100,7 @@ export function CollectionGridView ({
               <button
                 type="button"
                 onClick={() => onEdit(c)}
-                className="flex-1 rounded-lg border border-zinc-600/80 py-2 text-sm font-medium text-emerald-400 transition hover:bg-white/5"
+                className="flex-1 rounded-lg border border-zinc-600/80 py-2 text-sm font-medium text-slab-teal transition hover:bg-white/5"
               >
                 Edit
               </button>

@@ -2,11 +2,34 @@
 
 @theme {
   --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
-  --color-surface: #0c0e12;
-  --color-surface-raised: #12151c;
-  --color-border-subtle: #1f2430;
-  --color-accent: #34d399;
-  --color-accent-muted: rgba(52, 211, 153, 0.12);
+
+  /* SlabBook brand */
+  --slab-teal: #1d9e75;
+  --slab-teal-dark: #0f6e56;
+  --slab-teal-light: #5dcaa5;
+  --slab-teal-muted: #9fe1cb;
+  --slab-bg-card: #111111;
+  --slab-bg-dash: #1a1a1a;
+  --slab-border: #2c2c2a;
+  --slab-text: #f1efe8;
+  --slab-text-muted: #5f5e5a;
+
+  --color-slab-teal: var(--slab-teal);
+  --color-slab-teal-dark: var(--slab-teal-dark);
+  --color-slab-teal-light: var(--slab-teal-light);
+  --color-slab-teal-muted: var(--slab-teal-muted);
+  --color-slab-bg-card: var(--slab-bg-card);
+  --color-slab-bg-dash: var(--slab-bg-dash);
+  --color-slab-border: var(--slab-border);
+  --color-slab-text: var(--slab-text);
+  --color-slab-text-muted: var(--slab-text-muted);
+
+  /* App surfaces (aligned with brand) */
+  --color-surface: var(--slab-bg-dash);
+  --color-surface-raised: #161616;
+  --color-border-subtle: var(--slab-border);
+  --color-accent: var(--slab-teal);
+  --color-accent-muted: color-mix(in srgb, var(--slab-teal) 14%, transparent);
 }
 
 html {
@@ -14,7 +37,7 @@ html {
 }
 
 body {
-  @apply m-0 min-h-dvh bg-[var(--color-surface)] text-zinc-100 font-sans;
+  @apply m-0 min-h-dvh bg-[var(--color-surface)] font-sans text-[var(--slab-text)];
 }
 
 #root {

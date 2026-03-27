@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { Logo } from '../Logo'
+import { SlabBookLogo } from '../SlabBookLogo'
 
 const nav = [
   { to: '/dashboard', label: 'Dashboard', end: true },
@@ -59,8 +59,11 @@ export function DashboardLayout () {
   const sidebar = (
     <aside className="flex h-full w-64 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]">
       <div className="flex h-16 items-center border-b border-[var(--color-border-subtle)] px-5">
-        <Link to="/dashboard" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 rounded-lg">
-          <Logo />
+        <Link
+          to="/dashboard"
+          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-slab-teal/40 rounded-lg"
+        >
+          <SlabBookLogo size="md" />
         </Link>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5 p-3" aria-label="Main">
@@ -74,8 +77,8 @@ export function DashboardLayout () {
               [
                 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-emerald-400/10 text-emerald-300'
-                  : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+                  ? 'bg-slab-teal/10 text-slab-teal-light'
+                  : 'text-[var(--slab-text-muted)] hover:bg-white/5 hover:text-[var(--slab-text)]',
               ].join(' ')
             }
           >
@@ -140,11 +143,8 @@ export function DashboardLayout () {
               <path strokeLinecap="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
             </svg>
           </button>
-          <Link to="/dashboard" className="min-w-0 flex items-center gap-2">
-            <Logo compact />
-            <span className="text-base font-semibold tracking-tight text-white">
-              Slab<span className="text-emerald-400">Book</span>
-            </span>
+          <Link to="/dashboard" className="min-w-0">
+            <SlabBookLogo size="sm" />
           </Link>
         </header>
 

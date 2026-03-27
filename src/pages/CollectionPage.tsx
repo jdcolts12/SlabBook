@@ -348,7 +348,7 @@ export function CollectionPage () {
         <button
           type="button"
           onClick={openAdd}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -366,15 +366,15 @@ export function CollectionPage () {
       {loading ? (
         <div className="flex justify-center py-20">
           <div
-            className="h-9 w-9 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400"
+            className="h-9 w-9 animate-spin rounded-full border-2 border-zinc-700 border-t-slab-teal"
             role="status"
             aria-label="Loading collection"
           />
         </div>
       ) : !hasCards ? (
         <div className="rounded-2xl border border-dashed border-zinc-700 bg-gradient-to-b from-[var(--color-surface-raised)] to-[var(--color-surface)] px-6 py-20 text-center sm:py-24">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 ring-1 ring-emerald-500/25">
-            <svg className="h-8 w-8 text-emerald-400/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slab-teal/10 ring-1 ring-slab-teal/25">
+            <svg className="h-8 w-8 text-slab-teal/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -390,7 +390,7 @@ export function CollectionPage () {
           <button
             type="button"
             onClick={openAdd}
-            className="mt-10 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-8 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400"
+            className="mt-10 inline-flex items-center justify-center gap-2 rounded-xl bg-slab-teal px-8 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/20 transition hover:bg-slab-teal-light"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />

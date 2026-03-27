@@ -1,21 +1,25 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { parseInsightSections } from '../lib/parseInsightSections'
+import { formatLastAnalyzed } from '../lib/relativeTime'
 import { supabase } from '../lib/supabase'
 import type { AIInsight } from '../types/insight'
 
-function formatDate(value: string): string {
+function formatDate (value: string): string {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
   return d.toLocaleString()
 }
 
-export function AIInsightsPage() {
+export function AIInsightsPage () {
   const { user } = useAuth()
   const [insights, setInsights] = useState<AIInsight[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [readingIds, setReadingIds] = useState<Record<string, boolean>>({})
+  const [cardCount, setCardCount] = useState<number | null>(null)
+  const [infoBanner, setInfoBanner] = useState<string | null>(null)
 
   const loadInsights = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) {
@@ -39,6 +43,15 @@ export function AIInsightsPage() {
     setLoading(false)
   }, [user])
 
+  const loadCardCount = useCallback(async () => {
+    if (!user) return
+    const { count, error: countError } = await supabase
+      .from('cards')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+    if (!countError) setCardCount(count ?? 0)
+  }, [user])
+
   useEffect(() => {
     document.title = 'AI Insights — SlabBook'
   }, [])
@@ -46,9 +59,10 @@ export function AIInsightsPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadInsights()
+      void loadCardCount()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [loadInsights])
+  }, [loadInsights, loadCardCount])
 
   useEffect(() => {
     if (!user) return
@@ -73,10 +87,19 @@ export function AIInsightsPage() {
     }
   }, [user, loadInsights])
 
-  async function handleGenerateInsight() {
+  const latest = insights[0]
+  const latestSections = useMemo(
+    () => (latest ? parseInsightSections(latest.content) : []),
+    [latest],
+  )
+
+  const unreadCount = insights.filter((insight) => !insight.is_read).length
+
+  async function handleGetInsights () {
     if (!user) return
     setGenerating(true)
     setError(null)
+    setInfoBanner(null)
     try {
       const {
         data: { session },
@@ -85,7 +108,7 @@ export function AIInsightsPage() {
         throw new Error('Missing auth session. Please sign in again and retry.')
       }
 
-      const response = await fetch('/api/generate-insight', {
+      const response = await fetch('/api/get-insights', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,20 +118,28 @@ export function AIInsightsPage() {
       })
 
       const payload = (await response.json().catch(() => null)) as
-        | { error?: string }
+        | { error?: string; no_cards?: boolean; insight?: string }
         | null
 
       if (!response.ok) {
-        throw new Error(payload?.error ?? 'Failed to generate AI insight.')
+        throw new Error(payload?.error ?? 'Failed to get AI insights.')
       }
+
+      if (payload?.no_cards && payload.insight) {
+        setInfoBanner(payload.insight)
+        return
+      }
+
+      await loadInsights({ silent: true })
+      await loadCardCount()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to generate insight.')
+      setError(err instanceof Error ? err.message : 'Unable to get insights.')
     } finally {
       setGenerating(false)
     }
   }
 
-  async function markAsRead(id: string) {
+  async function markAsRead (id: string) {
     if (!user) return
     setError(null)
     setReadingIds((prev) => ({ ...prev, [id]: true }))
@@ -141,28 +172,55 @@ export function AIInsightsPage() {
     })
   }
 
-  const unreadCount = insights.filter((insight) => !insight.is_read).length
+  /** Disable only when we know the collection is empty */
+  const canAnalyze = cardCount !== 0
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">AI insights</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">AI Insights</h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Personalized commentary based on your collection data via Claude.
+            Portfolio analysis powered by Claude — tailored to your slabs and pricing.
           </p>
-          <p className="mt-2 text-xs text-zinc-500">
-            {unreadCount} unread insight{unreadCount === 1 ? '' : 's'}
-          </p>
+          {unreadCount > 0 && (
+            <p className="mt-2 text-xs text-zinc-500">
+              {unreadCount} unread insight{unreadCount === 1 ? '' : 's'}
+            </p>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={() => void handleGenerateInsight()}
-          disabled={generating}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:opacity-50"
-        >
-          {generating ? 'Generating…' : 'Generate insight'}
-        </button>
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <button
+            type="button"
+            onClick={() => void handleGetInsights()}
+            disabled={generating || !canAnalyze}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
+          >
+            {generating ? (
+              <>
+                <span
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-900/30 border-t-zinc-900"
+                  aria-hidden
+                />
+                Analyzing…
+              </>
+            ) : (
+              <>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.847a4.5 4.5 0 003.09 3.09L15.75 12l-2.847.813a4.5 4.5 0 00-3.09 3.09z"
+                  />
+                </svg>
+                {latest ? 'Refresh insights' : 'Get insights'}
+              </>
+            )}
+          </button>
+          {!canAnalyze && cardCount === 0 && (
+            <p className="text-xs text-amber-400/90">Add cards in Collection first.</p>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -171,62 +229,135 @@ export function AIInsightsPage() {
         </div>
       )}
 
+      {infoBanner && (
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          {infoBanner}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-20">
           <div
-            className="h-9 w-9 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400"
+            className="h-9 w-9 animate-spin rounded-full border-2 border-zinc-700 border-t-slab-teal"
             role="status"
             aria-label="Loading insights"
           />
         </div>
-      ) : insights.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-700 bg-[var(--color-surface-raised)]/50 px-6 py-16 text-center">
-          <p className="text-zinc-300">No insights yet.</p>
-          <p className="mt-2 text-sm text-zinc-500">
-            Generate your first insight from the cards currently in your collection.
+      ) : !latest ? (
+        <div className="rounded-2xl border border-dashed border-zinc-700 bg-[var(--color-surface-raised)]/60 px-6 py-16 text-center sm:py-20">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slab-teal/10 ring-1 ring-slab-teal/25">
+            <svg className="h-7 w-7 text-slab-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.176 7.176 0 00-3.726-1.728 7.176 7.176 0 00-3.726 1.728c.85.493 1.508 1.333 1.508 2.316V18"
+              />
+            </svg>
+          </div>
+          <h2 className="mt-6 text-lg font-semibold text-white">No analysis yet</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
+            We&apos;ll pull your collection from Supabase, send it to SlabBook AI, and return portfolio health,
+            sell opportunities, risks, a sleeper, and one action for this week.
           </p>
+          <button
+            type="button"
+            onClick={() => void handleGetInsights()}
+            disabled={generating || !canAnalyze}
+            className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-slab-teal px-6 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
+          >
+            {generating ? 'Analyzing…' : 'Get insights'}
+          </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {insights.map((insight) => (
-            <article
-              key={insight.id}
-              className={[
-                'rounded-xl border bg-[var(--color-surface-raised)] p-4',
-                insight.is_read
-                  ? 'border-[var(--color-border-subtle)]'
-                  : 'border-emerald-500/40 ring-1 ring-emerald-500/20',
-              ].join(' ')}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <p className="text-sm leading-6 text-zinc-200">{insight.content}</p>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span
-                    className={[
-                      'rounded-full px-2 py-1 text-[10px] font-medium uppercase tracking-wider',
-                      insight.is_read
-                        ? 'bg-zinc-700/50 text-zinc-300'
-                        : 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30',
-                    ].join(' ')}
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-zinc-500">
+              Last analyzed:{' '}
+              <span className="font-medium text-zinc-300">{formatLastAnalyzed(latest.created_at)}</span>
+              <span className="text-zinc-600"> · </span>
+              <span className="text-zinc-500">{formatDate(latest.created_at)}</span>
+            </p>
+            {latest && !latest.is_read && (
+              <button
+                type="button"
+                onClick={() => void markAsRead(latest.id)}
+                disabled={Boolean(readingIds[latest.id])}
+                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+              >
+                {readingIds[latest.id] ? 'Saving…' : 'Mark as read'}
+              </button>
+            )}
+          </div>
+
+          <div
+            className={[
+              'rounded-2xl border bg-[var(--color-surface-raised)] p-6 sm:p-8',
+              latest.is_read
+                ? 'border-[var(--color-border-subtle)]'
+                : 'border-slab-teal/35 ring-1 ring-slab-teal/15',
+            ].join(' ')}
+          >
+            <div className="mb-6 flex items-center gap-2">
+              <span className="rounded-full bg-slab-teal/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slab-teal-light">
+                Latest analysis
+              </span>
+              {!latest.is_read && (
+                <span className="rounded-full bg-slab-teal/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-slab-teal-light">
+                  New
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-8">
+              {latestSections.length === 0 ? (
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">{latest.content}</div>
+              ) : (
+                latestSections.map((section) => (
+                  <section key={section.title}>
+                    <h3 className="border-b border-[var(--color-border-subtle)] pb-2 text-base font-semibold text-white">
+                      {section.title}
+                    </h3>
+                    <div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                      {section.body || '—'}
+                    </div>
+                  </section>
+                ))
+              )}
+            </div>
+          </div>
+
+          {insights.length > 1 && (
+            <div>
+              <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Previous runs</h2>
+              <ul className="mt-3 space-y-2">
+                {insights.slice(1).map((row) => (
+                  <li
+                    key={row.id}
+                    className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/80 px-4 py-3"
                   >
-                    {insight.is_read ? 'Read' : 'Unread'}
-                  </span>
-                  {!insight.is_read && (
-                    <button
-                      type="button"
-                      onClick={() => void markAsRead(insight.id)}
-                      disabled={Boolean(readingIds[insight.id])}
-                      className="rounded-md border border-zinc-600 px-2.5 py-1 text-xs text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-                    >
-                      {readingIds[insight.id] ? 'Saving…' : 'Mark read'}
-                    </button>
-                  )}
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-zinc-500">{formatDate(insight.created_at)}</p>
-            </article>
-          ))}
-        </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="line-clamp-2 text-sm text-zinc-400">{row.content.replace(/^##[^\n]+\n?/m, '').trim()}</p>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="text-[10px] text-zinc-500">{formatLastAnalyzed(row.created_at)}</span>
+                        {!row.is_read && (
+                          <button
+                            type="button"
+                            onClick={() => void markAsRead(row.id)}
+                            disabled={Boolean(readingIds[row.id])}
+                            className="text-xs text-slab-teal hover:text-slab-teal-light disabled:opacity-50"
+                          >
+                            {readingIds[row.id] ? '…' : 'Mark read'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[11px] text-zinc-600">{formatDate(row.created_at)}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

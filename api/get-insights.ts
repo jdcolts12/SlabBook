@@ -14,35 +14,12 @@ type CardRow = {
   player_name: string
   year: number | null
   set_name: string | null
-  card_number: string | null
-  variation: string | null
+  sport: string | null
   is_graded: boolean
   grade: string | null
   grading_company: string | null
   purchase_price: number | null
   current_value: number | null
-}
-
-function getBearerToken(authHeader?: string): string | null {
-  if (!authHeader) return null
-  const [scheme, token] = authHeader.split(' ')
-  if (scheme?.toLowerCase() !== 'bearer' || !token) return null
-  return token
-}
-
-function serializeCards(cards: CardRow[]): string {
-  return cards
-    .slice(0, 60)
-    .map((card, index) => {
-      const grade = card.is_graded
-        ? `${card.grading_company ?? 'Graded'} ${card.grade ?? ''}`.trim()
-        : 'Raw'
-      const setBits = [card.year, card.set_name, card.card_number].filter(Boolean).join(' ')
-      const pricing = `purchase=${card.purchase_price ?? 'n/a'} current=${card.current_value ?? 'n/a'}`
-      const variation = card.variation ? `variation=${card.variation}` : ''
-      return `${index + 1}. ${card.player_name} | ${setBits} | ${grade} | ${pricing} ${variation}`.trim()
-    })
-    .join('\n')
 }
 
 type AnthropicTextBlock = {
@@ -56,7 +33,36 @@ type AnthropicErrorPayload = {
   content?: AnthropicTextBlock[]
 }
 
-export default async function handler(req: ApiRequest, res: ApiResponse) {
+const SYSTEM_PROMPT = `You are SlabBook AI, an expert sports card analyst and collector advisor. You analyze a user's card portfolio and provide personalized, actionable insights. You know current market trends, player performance impacts on card values, and collecting strategy. Be specific, conversational, and helpful. Reference actual cards in their collection by name.`
+
+function getBearerToken (authHeader?: string): string | null {
+  if (!authHeader) return null
+  const [scheme, token] = authHeader.split(' ')
+  if (scheme?.toLowerCase() !== 'bearer' || !token) return null
+  return token
+}
+
+function gradeLine (c: CardRow): string {
+  if (!c.is_graded) return 'Raw'
+  const bits = [c.grading_company, c.grade].filter(Boolean)
+  return bits.length ? bits.join(' ') : 'Graded'
+}
+
+function cardsToJsonPayload (cards: CardRow[]): unknown[] {
+  return cards.map((c) => ({
+    player: c.player_name,
+    year: c.year,
+    set: c.set_name,
+    sport: c.sport,
+    grade: gradeLine(c),
+    purchase_price: c.purchase_price != null ? Number(c.purchase_price) : null,
+    current_value: c.current_value != null ? Number(c.current_value) : null,
+  }))
+}
+
+const EMPTY_MESSAGE = `Add a few cards to your collection first — then SlabBook AI can break down your portfolio, opportunities, and risks.`
+
+export default async function handler (req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
@@ -94,7 +100,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const { data: cardsData, error: cardsError } = await admin
     .from('cards')
     .select(
-      'player_name, year, set_name, card_number, variation, is_graded, grade, grading_company, purchase_price, current_value',
+      'player_name, year, set_name, sport, is_graded, grade, grading_company, purchase_price, current_value',
     )
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
@@ -106,26 +112,31 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const cards = (cardsData ?? []) as CardRow[]
 
   if (cards.length === 0) {
-    const starter = 'Start by adding a few cards to your collection so I can generate tailored SlabBook insights.'
-    const { error: insertError } = await admin.from('ai_insights').insert({
-      user_id: user.id,
-      content: starter,
-      is_read: false,
+    return res.status(200).json({
+      insight: EMPTY_MESSAGE,
+      no_cards: true,
     })
-    if (insertError) return res.status(500).json({ error: insertError.message })
-    return res.status(200).json({ insight: starter })
   }
 
-  const prompt = [
-    'You are the SlabBook AI analyst for a sports card portfolio.',
-    'Generate one concise, specific insight in 1-2 sentences.',
-    'Use only information present in the cards list.',
-    'Prioritize actionable observations: concentration risk, gain/loss gaps, grading strategy, or value trends.',
-    'Do not mention missing data policies or generic disclaimers.',
-    '',
-    'Cards:',
-    serializeCards(cards),
-  ].join('\n')
+  const collectionJson = JSON.stringify(cardsToJsonPayload(cards), null, 2)
+
+  const userPrompt = `Here is my sports card collection: ${collectionJson}
+
+Please give me:
+- Portfolio health summary (2-3 sentences)
+- Top 3 opportunities (cards to potentially sell now)
+- Top 3 risks (cards that may be losing value)
+- One sleeper pick from my collection with upside
+- One actionable thing I should do this week
+
+Format each section with a clear header and keep the tone like a knowledgeable friend, not a robot.
+
+Use exactly these Markdown section headers (##) in this order:
+## Portfolio health summary
+## Top 3 opportunities
+## Top 3 risks
+## Sleeper pick
+## Action this week`
 
   const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -136,9 +147,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 220,
-      temperature: 0.3,
-      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 4096,
+      temperature: 0.35,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userPrompt }],
     }),
   })
 
@@ -159,12 +171,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       .join('\n')
       .trim() || 'No insight generated.'
 
-  const { error: insertError } = await admin.from('ai_insights').insert({
-    user_id: user.id,
-    content,
-    is_read: false,
-  })
+  const { data: inserted, error: insertError } = await admin
+    .from('ai_insights')
+    .insert({
+      user_id: user.id,
+      content,
+      is_read: false,
+    })
+    .select('id, created_at')
+    .single()
+
   if (insertError) return res.status(500).json({ error: insertError.message })
 
-  return res.status(200).json({ insight: content })
+  return res.status(200).json({
+    insight: content,
+    id: inserted?.id,
+    created_at: inserted?.created_at,
+  })
 }

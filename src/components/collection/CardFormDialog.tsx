@@ -157,7 +157,7 @@ export function CardFormDialog ({
   if (!open) return null
 
   const inputCls =
-    'mt-1 w-full rounded-lg border border-zinc-700 bg-[var(--color-surface)] px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20'
+    'mt-1 w-full rounded-lg border border-zinc-700 bg-[var(--color-surface)] px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20'
 
   async function handleSubmit (e: FormEvent) {
     e.preventDefault()
@@ -376,7 +376,7 @@ export function CardFormDialog ({
                         grading_company: e.target.checked ? f.grading_company : '',
                       }))
                     }
-                    className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500/30"
+                    className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-slab-teal focus:ring-slab-teal/30"
                   />
                   <span className="text-sm text-zinc-200">Graded (slab)</span>
                 </label>
@@ -508,7 +508,7 @@ export function CardFormDialog ({
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+                  className="rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50"
                 >
                   {saving ? 'Saving…' : mode === 'add' ? 'Add card' : 'Save changes'}
                 </button>
@@ -557,7 +557,7 @@ export function CardFormDialog ({
                   </div>
                   <div className="flex justify-between gap-4">
                     <dt className="text-zinc-500">Value</dt>
-                    <dd className="text-right text-emerald-300">{preview.value}</dd>
+                    <dd className="text-right text-slab-teal-light">{preview.value}</dd>
                   </div>
                 </dl>
               </div>

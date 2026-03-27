@@ -42,7 +42,7 @@ export function PortfolioSummaryBar ({ metrics, loading, money, pct }: Props) {
           label="Gain / loss"
           sub={
             metrics.gainLossPercent != null ? (
-              <span className={gainPositive ? 'text-emerald-400/90' : 'text-red-400/90'}>
+              <span className={gainPositive ? 'text-slab-teal/90' : 'text-red-400/90'}>
                 {gainPctStr} portfolio
               </span>
             ) : (
@@ -56,7 +56,7 @@ export function PortfolioSummaryBar ({ metrics, loading, money, pct }: Props) {
             <span
               className={[
                 'tabular-nums',
-                gainPositive ? 'text-emerald-400' : 'text-red-400',
+                gainPositive ? 'text-slab-teal' : 'text-red-400',
               ].join(' ')}
             >
               {money.format(metrics.gainLossDollars)}
@@ -70,7 +70,7 @@ export function PortfolioSummaryBar ({ metrics, loading, money, pct }: Props) {
             metrics.bestPerformer ? (
               <span
                 className={
-                  metrics.bestPerformer.gainPercent >= 0 ? 'text-emerald-400/90' : 'text-amber-400/90'
+                  metrics.bestPerformer.gainPercent >= 0 ? 'text-slab-teal/90' : 'text-amber-400/90'
                 }
               >
                 {pct.format(metrics.bestPerformer.gainPercent / 100)} vs cost

@@ -22,7 +22,7 @@ function GainCell ({ c, money }: { c: Card; money: Intl.NumberFormat }) {
   return (
     <div className="text-right">
       {d != null && (
-        <div className={[pos ? 'text-emerald-400' : 'text-red-400', 'tabular-nums'].join(' ')}>
+        <div className={[pos ? 'text-slab-teal' : 'text-red-400', 'tabular-nums'].join(' ')}>
           {d >= 0 ? '+' : ''}
           {money.format(d)}
         </div>
@@ -76,7 +76,7 @@ export function CollectionTableView ({
                 <td className="px-3 py-3 text-right tabular-nums text-zinc-300 lg:px-4">
                   {c.purchase_price != null ? money.format(Number(c.purchase_price)) : '—'}
                 </td>
-                <td className="px-3 py-3 text-right tabular-nums text-emerald-300/90 lg:px-4">
+                <td className="px-3 py-3 text-right tabular-nums text-slab-teal-light/90 lg:px-4">
                   {c.current_value != null ? money.format(Number(c.current_value)) : '—'}
                 </td>
                 <td className="px-3 py-3 lg:px-4">
@@ -99,7 +99,7 @@ export function CollectionTableView ({
                   <button
                     type="button"
                     onClick={() => onEdit(c)}
-                    className="mr-1 rounded-md px-2 py-1 text-emerald-400 hover:bg-white/5 hover:text-emerald-300"
+                    className="mr-1 rounded-md px-2 py-1 text-slab-teal hover:bg-white/5 hover:text-slab-teal-light"
                   >
                     Edit
                   </button>

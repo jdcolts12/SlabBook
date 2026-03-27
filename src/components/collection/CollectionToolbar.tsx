@@ -19,7 +19,7 @@ type Props = {
 }
 
 const selectCls =
-  'rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-zinc-200 outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30'
+  'rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-3 py-2 text-sm text-zinc-200 outline-none focus:border-slab-teal/50 focus:ring-1 focus:ring-slab-teal/30'
 
 export function CollectionToolbar ({
   sortBy,
@@ -46,7 +46,7 @@ export function CollectionToolbar ({
             className={[
               'rounded-md px-3 py-1.5 text-sm font-medium transition',
               viewMode === 'table'
-                ? 'bg-emerald-500/20 text-emerald-200'
+                ? 'bg-slab-teal/20 text-slab-teal-muted'
                 : 'text-zinc-400 hover:text-zinc-200',
             ].join(' ')}
           >
@@ -58,7 +58,7 @@ export function CollectionToolbar ({
             className={[
               'rounded-md px-3 py-1.5 text-sm font-medium transition',
               viewMode === 'grid'
-                ? 'bg-emerald-500/20 text-emerald-200'
+                ? 'bg-slab-teal/20 text-slab-teal-muted'
                 : 'text-zinc-400 hover:text-zinc-200',
             ].join(' ')}
           >

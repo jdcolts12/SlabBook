@@ -19,7 +19,7 @@ export function ProtectedRoute ({ children }: ProtectedRouteProps) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-[var(--color-surface)]">
         <div
-          className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400"
+          className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-slab-teal"
           role="status"
           aria-label="Loading"
         />

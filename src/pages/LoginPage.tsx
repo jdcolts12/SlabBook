@@ -50,7 +50,7 @@ export function LoginPage () {
       footer={
         <>
           New to SlabBook?{' '}
-          <Link to="/signup" className="font-medium text-emerald-400 hover:text-emerald-300">
+          <Link to="/signup" className="font-medium text-slab-teal hover:text-slab-teal-light">
             Create an account
           </Link>
         </>
@@ -76,7 +76,7 @@ export function LoginPage () {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-[var(--color-surface)] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-[var(--color-surface)] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20"
             placeholder="you@example.com"
           />
         </div>
@@ -92,7 +92,7 @@ export function LoginPage () {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-[var(--color-surface)] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-[var(--color-surface)] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20"
           />
         </div>
         {error && (
@@ -103,7 +103,7 @@ export function LoginPage () {
         <button
           type="submit"
           disabled={submitting || authLoading}
-          className="w-full rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:opacity-50"
+          className="w-full rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
         >
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
