@@ -228,39 +228,43 @@ export function DashboardLayout () {
         {subscriptionEndsAt && (
           <p className="mt-1 text-[11px] text-zinc-500">Sub ends: {prettyDate(subscriptionEndsAt) ?? subscriptionEndsAt}</p>
         )}
-        <div className="mt-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-2.5">
-          <p className="mb-2 text-[11px] font-medium text-zinc-300">Apply promo code</p>
-          <PromoCodeInput
-            value={promoCode}
-            onChange={setPromoCode}
-            tier={promoTier}
-            userId={user?.id ?? null}
-            id="sidebar-promo-code"
-            placeholder="CODE"
-          />
-          <select
-            value={promoTier}
-            onChange={(e) => setPromoTier(e.target.value)}
-            className="mt-2 h-9 w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-2 text-xs text-[var(--slab-text)] focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20"
-          >
-            <option value="free">Free</option>
-            <option value="collector">Collector</option>
-            <option value="lifetime">Investor / Lifetime</option>
-          </select>
-          <button
-            type="button"
-            onClick={() => void applyPromoCode()}
-            disabled={applyingPromo || !promoCode.trim()}
-            className="mt-2 w-full rounded-lg bg-slab-teal px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
-          >
-            {applyingPromo ? 'Applying…' : 'Apply Code'}
-          </button>
-          {promoResult && (
-            <p className={promoResult.type === 'success' ? 'mt-2 text-[11px] text-slab-teal-light' : 'mt-2 text-[11px] text-red-400'}>
-              {promoResult.message}
-            </p>
-          )}
-        </div>
+        <details className="mt-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-2">
+          <summary className="cursor-pointer list-none rounded-md bg-slab-teal/15 px-2 py-1.5 text-center text-[11px] font-semibold text-slab-teal-light">
+            Apply promo
+          </summary>
+          <div className="mt-2">
+            <PromoCodeInput
+              value={promoCode}
+              onChange={setPromoCode}
+              tier={promoTier}
+              userId={user?.id ?? null}
+              id="sidebar-promo-code"
+              placeholder="CODE"
+            />
+            <select
+              value={promoTier}
+              onChange={(e) => setPromoTier(e.target.value)}
+              className="mt-2 h-9 w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-2 text-xs text-[var(--slab-text)] focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20"
+            >
+              <option value="free">Free</option>
+              <option value="collector">Collector</option>
+              <option value="lifetime">Investor / Lifetime</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => void applyPromoCode()}
+              disabled={applyingPromo || !promoCode.trim()}
+              className="mt-2 w-full rounded-lg bg-slab-teal px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
+            >
+              {applyingPromo ? 'Applying…' : 'Apply Code'}
+            </button>
+            {promoResult && (
+              <p className={promoResult.type === 'success' ? 'mt-2 text-[11px] text-slab-teal-light' : 'mt-2 text-[11px] text-red-400'}>
+                {promoResult.message}
+              </p>
+            )}
+          </div>
+        </details>
         {import.meta.env.VITE_GIT_SHA ? (
           <p className="mt-2 font-mono text-[10px] text-zinc-600" title="Vercel build commit">
             Build {import.meta.env.VITE_GIT_SHA.slice(0, 7)}
