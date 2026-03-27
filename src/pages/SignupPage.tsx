@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout } from '../components/layout/AuthLayout'
+import { PromoCodeInput } from '../components/promo/PromoCodeInput'
 import { useAuth } from '../hooks/useAuth'
+import { redeemPromoRequest } from '../lib/promoApi'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
 export function SignupPage () {
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [promoCode, setPromoCode] = useState(() => searchParams.get('promo')?.trim().toUpperCase() ?? '')
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -47,7 +51,15 @@ export function SignupPage () {
       setInfo('Check your email to confirm your account, then sign in.')
       return
     }
-    navigate('/dashboard', { replace: true })
+    if (data.session) {
+      if (promoCode.trim()) {
+        const redeem = await redeemPromoRequest(promoCode.trim(), data.session.access_token, 'free')
+        if (redeem.error) {
+          setInfo(`Account created. Promo: ${redeem.error}`)
+        }
+      }
+      navigate('/dashboard', { replace: true })
+    }
   }
 
   return (
@@ -104,6 +116,16 @@ export function SignupPage () {
           />
           <p className="mt-1 text-xs text-zinc-500">At least 8 characters.</p>
         </div>
+
+        <details className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)]/80 px-3 py-2">
+          <summary className="cursor-pointer text-sm font-medium text-[var(--slab-text-muted)]">
+            Have a promo code?
+          </summary>
+          <div className="mt-3 pb-1">
+            <PromoCodeInput value={promoCode} onChange={setPromoCode} placeholder="CODE" />
+          </div>
+        </details>
+
         {error && (
           <p className="text-sm text-red-400" role="alert">
             {error}

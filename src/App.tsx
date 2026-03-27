@@ -5,8 +5,10 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { AIInsightsPage } from './pages/AIInsightsPage'
 import { CollectionPage } from './pages/CollectionPage'
 import { DashboardHomePage } from './pages/DashboardHomePage'
+import { AdminPage } from './pages/AdminPage'
 import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
+import { PricingPage } from './pages/PricingPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { SignupPage } from './pages/SignupPage'
 
@@ -16,6 +18,8 @@ function App () {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route
@@ -40,7 +44,7 @@ function App () {
               }
             />
           </Route>
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
