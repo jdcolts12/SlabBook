@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CardFormDialog, type CardFormValues } from '../components/collection/CardFormDialog'
+import { CardFormDialog } from '../components/collection/CardFormDialog'
+import { type CardFormValues, variationFromFormValues } from '../lib/cardForm'
+import { Toast } from '../components/Toast'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import type { Card } from '../types/card'
@@ -9,6 +11,29 @@ const money = new Intl.NumberFormat('en-US', {
   currency: 'USD',
   maximumFractionDigits: 2,
 })
+
+type CardValueResponse = {
+  average_sale_price: number
+  lowest_recent_sale: number
+  highest_recent_sale: number
+  last_sold_date: string | null
+  last_sold_price: number
+  ebay_search_url: string
+  updated_at: string
+}
+
+function formatRelativeTime(value: string | null): string {
+  if (!value) return 'Never'
+  const timestamp = new Date(value).getTime()
+  if (Number.isNaN(timestamp)) return 'Unknown'
+  const diffMs = Date.now() - timestamp
+  const hours = Math.floor(diffMs / (1000 * 60 * 60))
+  if (hours < 1) return 'Updated <1 hour ago'
+  if (hours === 1) return 'Updated 1 hour ago'
+  if (hours < 24) return `Updated ${hours} hours ago`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? 'Updated 1 day ago' : `Updated ${days} days ago`
+}
 
 function parseOptionalNumber (raw: string): number | null {
   const t = raw.trim()
@@ -30,15 +55,16 @@ function formValuesToPayload (
 ): Omit<Card, 'id' | 'created_at' | 'last_updated'> {
   return {
     user_id: userId,
+    sport: v.sport,
     player_name: v.player_name.trim(),
     year: parseOptionalInt(v.year),
     set_name: v.set_name.trim() || null,
     card_number: v.card_number.trim() || null,
-    variation: v.variation.trim() || null,
+    variation: variationFromFormValues(v),
     is_graded: v.is_graded,
     grade: v.is_graded && v.grade.trim() ? v.grade.trim() : null,
     grading_company: v.is_graded && v.grading_company.trim() ? v.grading_company.trim() : null,
-    condition: v.condition.trim() || null,
+    condition: v.is_graded ? null : v.condition.trim() || null,
     purchase_price: parseOptionalNumber(v.purchase_price),
     purchase_date: v.purchase_date.trim() || null,
     current_value: parseOptionalNumber(v.current_value),
@@ -50,10 +76,12 @@ export function CollectionPage () {
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [refreshingIds, setRefreshingIds] = useState<Record<string, boolean>>({})
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add')
   const [editing, setEditing] = useState<Card | null>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const loadCards = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) {
@@ -134,6 +162,7 @@ export function CollectionPage () {
         last_updated: new Date().toISOString(),
       })
       if (error) throw new Error(error.message)
+      setToastMessage('Card added to your collection.')
     } else if (editing) {
       const { error } = await supabase
         .from('cards')
@@ -161,8 +190,72 @@ export function CollectionPage () {
     await loadCards({ silent: true })
   }
 
+  async function refreshSingleCardValue (card: Card) {
+    setLoadError(null)
+    setRefreshingIds((prev) => ({ ...prev, [card.id]: true }))
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Missing auth session. Please sign in again.')
+      }
+
+      const response = await fetch('/api/fetch-card-value', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          card_id: card.id,
+          sport: card.sport,
+          player_name: card.player_name,
+          year: card.year,
+          set_name: card.set_name,
+          card_number: card.card_number,
+          variation: card.variation,
+          is_graded: card.is_graded,
+          grade: card.grade,
+          grading_company: card.grading_company,
+        }),
+      })
+
+      const payload = (await response.json().catch(() => null)) as
+        | (CardValueResponse & { error?: string })
+        | null
+      if (!response.ok) {
+        throw new Error(payload?.error ?? 'Unable to refresh value.')
+      }
+
+      setCards((prev) =>
+        prev.map((entry) =>
+          entry.id === card.id
+            ? {
+                ...entry,
+                current_value: payload?.average_sale_price ?? entry.current_value,
+                last_updated: payload?.updated_at ?? new Date().toISOString(),
+              }
+            : entry,
+        ),
+      )
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Unable to refresh value.')
+    } finally {
+      setRefreshingIds((prev) => {
+        const next = { ...prev }
+        delete next[card.id]
+        return next
+      })
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      {toastMessage && (
+        <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Collection</h1>
@@ -247,8 +340,19 @@ export function CollectionPage () {
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-emerald-300/90">
                       {c.current_value != null ? money.format(Number(c.current_value)) : '—'}
+                      <div className="mt-1 text-[11px] text-zinc-500">{formatRelativeTime(c.last_updated)}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => void refreshSingleCardValue(c)}
+                        disabled={Boolean(refreshingIds[c.id])}
+                        className="mr-2 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
+                        title="Refresh market value"
+                        aria-label="Refresh card value"
+                      >
+                        {refreshingIds[c.id] ? '...' : '↻'}
+                      </button>
                       <button
                         type="button"
                         onClick={() => openEdit(c)}

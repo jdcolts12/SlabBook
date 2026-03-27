@@ -39,6 +39,7 @@ create trigger on_auth_user_created
 create table if not exists public.cards (
   id uuid primary key default gen_random_uuid (),
   user_id uuid not null references public.users (id) on delete cascade,
+  sport text,
   player_name text not null,
   year integer,
   set_name text,

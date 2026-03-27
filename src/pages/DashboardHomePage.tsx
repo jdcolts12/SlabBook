@@ -8,6 +8,7 @@ export function DashboardHomePage () {
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [refreshingValues, setRefreshingValues] = useState(false)
 
   const loadCards = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) {
@@ -85,6 +86,55 @@ export function DashboardHomePage () {
     document.title = 'Dashboard — SlabBook'
   }, [])
 
+  async function refreshAllValues () {
+    if (!user || cards.length === 0) return
+    setError(null)
+    setRefreshingValues(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Missing auth session. Please sign in again.')
+      }
+
+      for (const card of cards) {
+        const response = await fetch('/api/fetch-card-value', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            card_id: card.id,
+            sport: card.sport,
+            player_name: card.player_name,
+            year: card.year,
+            set_name: card.set_name,
+            card_number: card.card_number,
+            variation: card.variation,
+            is_graded: card.is_graded,
+            grade: card.grade,
+            grading_company: card.grading_company,
+          }),
+        })
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null
+          throw new Error(payload?.error ?? `Failed updating ${card.player_name}.`)
+        }
+      }
+
+      await loadCards()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to refresh card values.')
+    } finally {
+      setRefreshingValues(false)
+    }
+  }
+
   const money = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -93,11 +143,21 @@ export function DashboardHomePage () {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Dashboard</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Portfolio overview, movers, and performance from your live collection.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Dashboard</h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Portfolio overview, movers, and performance from your live collection.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void refreshAllValues()}
+          disabled={refreshingValues || cards.length === 0}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:opacity-50"
+        >
+          {refreshingValues ? 'Refreshing values…' : 'Refresh Values'}
+        </button>
       </div>
 
       {error && (

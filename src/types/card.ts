@@ -2,6 +2,7 @@
 export type Card = {
   id: string
   user_id: string
+  sport: string | null
   player_name: string
   year: number | null
   set_name: string | null
