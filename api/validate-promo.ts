@@ -3,7 +3,7 @@ import { validatePromoCode } from './lib/promo'
 
 type ApiRequest = {
   method?: string
-  headers: Record<string, string | undefined>
+  headers?: Record<string, string | undefined>
   body?: unknown
 }
 
@@ -26,40 +26,45 @@ function getJson (body: unknown): Record<string, unknown> {
 }
 
 export default async function handler (req: ApiRequest, res: ApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
+  try {
+    if (req.method !== 'POST') {
+      res.setHeader('Allow', 'POST')
+      return res.status(405).json({ error: 'Method not allowed' })
+    }
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-  const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+    const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!supabaseUrl || !supabaseServiceRole) {
-    return res.status(500).json({ error: 'Missing Supabase server configuration.' })
-  }
+    if (!supabaseUrl || !supabaseServiceRole) {
+      return res.status(500).json({ error: 'Missing Supabase server configuration.' })
+    }
 
-  const admin = createClient(supabaseUrl, supabaseServiceRole, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-
-  const json = getJson(req.body)
-  const code = typeof json.code === 'string' ? json.code : ''
-  const tier = typeof json.tier === 'string' ? json.tier : undefined
-  const user_id = typeof json.user_id === 'string' ? json.user_id : null
-
-  const result = await validatePromoCode(admin, code, { tier, userId: user_id })
-
-  if (!result.valid) {
-    return res.status(200).json({
-      valid: false,
-      error: result.error,
+    const admin = createClient(supabaseUrl, supabaseServiceRole, {
+      auth: { persistSession: false, autoRefreshToken: false },
     })
-  }
 
-  return res.status(200).json({
-    valid: true,
-    discount_type: result.discount_type,
-    discount_value: result.discount_value,
-    message: result.message,
-  })
+    const json = getJson(req.body)
+    const code = typeof json.code === 'string' ? json.code : ''
+    const tier = typeof json.tier === 'string' ? json.tier : undefined
+    const user_id = typeof json.user_id === 'string' ? json.user_id : null
+
+    const result = await validatePromoCode(admin, code, { tier, userId: user_id })
+
+    if (!result.valid) {
+      return res.status(200).json({
+        valid: false,
+        error: result.error,
+      })
+    }
+
+    return res.status(200).json({
+      valid: true,
+      discount_type: result.discount_type,
+      discount_value: result.discount_value,
+      message: result.message,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown promo validation error'
+    return res.status(500).json({ error: `Promo validation failed: ${message}` })
+  }
 }
