@@ -52,10 +52,18 @@ export function DashboardLayout () {
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null)
+  const [promoCodeUsed, setPromoCodeUsed] = useState<string | null>(null)
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
+  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) {
-      const clear = window.setTimeout(() => setSubscriptionTier(null), 0)
+      const clear = window.setTimeout(() => {
+        setSubscriptionTier(null)
+        setPromoCodeUsed(null)
+        setTrialEndsAt(null)
+        setSubscriptionEndsAt(null)
+      }, 0)
       return () => window.clearTimeout(clear)
     }
 
@@ -67,18 +75,31 @@ export function DashboardLayout () {
     void (async () => {
       const { data } = await supabase
         .from('users')
-        .select('subscription_tier')
+        .select('subscription_tier, promo_code_used, trial_ends_at, subscription_ends_at')
         .eq('id', user.id)
         .maybeSingle()
       if (!active) return
       const tier = typeof data?.subscription_tier === 'string' ? data.subscription_tier : null
+      const promo = typeof data?.promo_code_used === 'string' ? data.promo_code_used : null
+      const trial = typeof data?.trial_ends_at === 'string' ? data.trial_ends_at : null
+      const subEnd = typeof data?.subscription_ends_at === 'string' ? data.subscription_ends_at : null
       setSubscriptionTier(tier)
+      setPromoCodeUsed(promo)
+      setTrialEndsAt(trial)
+      setSubscriptionEndsAt(subEnd)
     })()
 
     return () => {
       active = false
     }
   }, [user])
+
+  function prettyDate (iso: string | null): string | null {
+    if (!iso) return null
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return null
+    return d.toLocaleDateString()
+  }
 
   async function handleSignOut () {
     await signOut()
@@ -124,6 +145,15 @@ export function DashboardLayout () {
               Plan: {subscriptionTier}
             </span>
           </p>
+        )}
+        <p className="mt-1 text-[11px] text-zinc-400">
+          Promo: {promoCodeUsed ?? 'None'}
+        </p>
+        {trialEndsAt && (
+          <p className="mt-1 text-[11px] text-zinc-500">Trial ends: {prettyDate(trialEndsAt) ?? trialEndsAt}</p>
+        )}
+        {subscriptionEndsAt && (
+          <p className="mt-1 text-[11px] text-zinc-500">Sub ends: {prettyDate(subscriptionEndsAt) ?? subscriptionEndsAt}</p>
         )}
         {import.meta.env.VITE_GIT_SHA ? (
           <p className="mt-2 font-mono text-[10px] text-zinc-600" title="Vercel build commit">
