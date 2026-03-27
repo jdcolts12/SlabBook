@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
@@ -56,6 +56,22 @@ export function DashboardLayout () {
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null)
 
+  const loadMembership = useCallback(async (userId: string) => {
+    const { data } = await supabase
+      .from('users')
+      .select('subscription_tier, promo_code_used, trial_ends_at, subscription_ends_at')
+      .eq('id', userId)
+      .maybeSingle()
+    const tier = typeof data?.subscription_tier === 'string' ? data.subscription_tier : null
+    const promo = typeof data?.promo_code_used === 'string' ? data.promo_code_used : null
+    const trial = typeof data?.trial_ends_at === 'string' ? data.trial_ends_at : null
+    const subEnd = typeof data?.subscription_ends_at === 'string' ? data.subscription_ends_at : null
+    setSubscriptionTier(tier)
+    setPromoCodeUsed(promo)
+    setTrialEndsAt(trial)
+    setSubscriptionEndsAt(subEnd)
+  }, [])
+
   useEffect(() => {
     if (!user) {
       const clear = window.setTimeout(() => {
@@ -67,32 +83,40 @@ export function DashboardLayout () {
       return () => window.clearTimeout(clear)
     }
 
-    if (!user.id) {
-      return
-    }
-
     let active = true
-    void (async () => {
-      const { data } = await supabase
-        .from('users')
-        .select('subscription_tier, promo_code_used, trial_ends_at, subscription_ends_at')
-        .eq('id', user.id)
-        .maybeSingle()
+    const timer = window.setTimeout(() => {
+      void loadMembership(user.id)
+    }, 0)
+
+    const onRefreshMembership = () => {
       if (!active) return
-      const tier = typeof data?.subscription_tier === 'string' ? data.subscription_tier : null
-      const promo = typeof data?.promo_code_used === 'string' ? data.promo_code_used : null
-      const trial = typeof data?.trial_ends_at === 'string' ? data.trial_ends_at : null
-      const subEnd = typeof data?.subscription_ends_at === 'string' ? data.subscription_ends_at : null
-      setSubscriptionTier(tier)
-      setPromoCodeUsed(promo)
-      setTrialEndsAt(trial)
-      setSubscriptionEndsAt(subEnd)
-    })()
+      void loadMembership(user.id)
+    }
+    window.addEventListener('subscription-updated', onRefreshMembership)
+
+    const channel = supabase
+      .channel(`dashboard-user-membership-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${user.id}`,
+        },
+        () => {
+          onRefreshMembership()
+        },
+      )
+      .subscribe()
 
     return () => {
       active = false
+      window.clearTimeout(timer)
+      window.removeEventListener('subscription-updated', onRefreshMembership)
+      void supabase.removeChannel(channel)
     }
-  }, [user])
+  }, [user, loadMembership])
 
   function prettyDate (iso: string | null): string | null {
     if (!iso) return null

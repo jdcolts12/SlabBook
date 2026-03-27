@@ -12,6 +12,7 @@ type Props = {
   onPromoChange: (v: string) => void
   showFoundingBanner?: boolean
   checkoutLabel?: string
+  ctaBasePath?: '/signup' | '/dashboard'
 }
 
 const TIERS: {
@@ -88,11 +89,14 @@ function tierForValidation (t: TierId): string {
   return t
 }
 
-function buildSignupHref (tier: TierId, promoCode: string): string {
+function buildCtaHref (tier: TierId, promoCode: string, ctaBasePath: '/signup' | '/dashboard'): string {
   const params = new URLSearchParams()
   params.set('tier', tier)
   const promo = promoCode.trim()
   if (promo) params.set('promo', promo.toUpperCase())
+  if (ctaBasePath === '/dashboard') {
+    return `/dashboard?${params.toString()}#promo-upgrade`
+  }
   return `/signup?${params.toString()}`
 }
 
@@ -103,6 +107,7 @@ export function PricingSection ({
   onPromoChange,
   showFoundingBanner = true,
   checkoutLabel = 'Choose a plan and sign up to get started.',
+  ctaBasePath = '/signup',
 }: Props) {
   const [promoMeta, setPromoMeta] = useState<ValidatePromoResponse | null>(null)
   const tierKey = tierForValidation(selectedTier)
@@ -146,7 +151,7 @@ export function PricingSection ({
                 <p className="mt-2 text-xs text-amber-200/70">Have a code? Enter it below — it applies before checkout.</p>
               </div>
               <Link
-                to={buildSignupHref('investor', promoCode)}
+                to={buildCtaHref('investor', promoCode, ctaBasePath)}
                 className="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-300"
               >
                 Claim Lifetime Access
@@ -209,7 +214,7 @@ export function PricingSection ({
                   ))}
                 </ul>
                 <Link
-                  to={buildSignupHref(t.id, promoCode)}
+                  to={buildCtaHref(t.id, promoCode, ctaBasePath)}
                   className="mt-8 inline-flex items-center justify-center rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
                   onClick={(e) => e.stopPropagation()}
                 >
