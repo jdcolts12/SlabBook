@@ -31,8 +31,6 @@ function CardIcon ({
   iconOnly: boolean
 }) {
   const heightPx = Math.round(widthPx * ASPECT)
-  const badgeLabel = iconOnly ? 'SB' : 'PSA'
-  const fontSize = iconOnly ? 6.75 : 6
 
   return (
     <svg
@@ -44,48 +42,50 @@ function CardIcon ({
       className="shrink-0"
       aria-hidden
     >
-      <rect
-        x="2"
-        y="2"
-        width="28"
-        height="36"
-        rx="4"
-        fill="var(--slab-bg-card, #111111)"
-        stroke="var(--slab-teal, #1D9E75)"
-        strokeWidth="1.5"
-      />
-      <line
-        x1="6.5"
-        y1="10"
-        x2="25.5"
-        y2="10"
-        stroke="var(--slab-teal, #1D9E75)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="6.5"
-        y1="14.5"
-        x2="19"
-        y2="14.5"
-        stroke="var(--slab-teal, #1D9E75)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <rect x="5" y="27.5" width="22" height="9" rx="1.5" fill="var(--slab-teal-dark, #0F6E56)" />
-      <text
-        x="16"
-        y="34.2"
-        textAnchor="middle"
-        fill="var(--slab-teal-muted, #9FE1CB)"
-        style={{
-          fontSize: `${fontSize}px`,
-          fontFamily: 'DM Sans, ui-sans-serif, system-ui, sans-serif',
-          fontWeight: 600,
-        }}
-      >
-        {badgeLabel}
-      </text>
+      <defs>
+        <linearGradient id="cardTop" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#1B1F26" />
+          <stop offset="100%" stopColor="#101217" />
+        </linearGradient>
+        <linearGradient id="cardBottom" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#0E6852" />
+          <stop offset="100%" stopColor="#1D9E75" />
+        </linearGradient>
+      </defs>
+
+      {/* Back card: Michael Jordan */}
+      <g transform="translate(1.5,4) rotate(-8 8.5 17.5)">
+        <rect x="1" y="1" width="15" height="33" rx="2.5" fill="url(#cardTop)" stroke="#1D9E75" strokeWidth="1" />
+        <rect x="2.5" y="2.5" width="12" height="15" rx="1.5" fill="#20242C" />
+        <rect x="2.5" y="19.5" width="12" height="12.5" rx="1.5" fill="url(#cardBottom)" />
+        <text x="8.5" y="27" textAnchor="middle" fill="#D9F6EA" style={{ fontSize: '3px', fontFamily: 'DM Sans, ui-sans-serif, system-ui, sans-serif', fontWeight: 700 }}>
+          M.JORDAN
+        </text>
+      </g>
+
+      {/* Middle card: Tom Brady */}
+      <g transform="translate(8,2)">
+        <rect x="1" y="1" width="15" height="33" rx="2.5" fill="url(#cardTop)" stroke="#1D9E75" strokeWidth="1" />
+        <rect x="2.5" y="2.5" width="12" height="15" rx="1.5" fill="#232933" />
+        <rect x="2.5" y="19.5" width="12" height="12.5" rx="1.5" fill="url(#cardBottom)" />
+        <text x="8.5" y="27" textAnchor="middle" fill="#D9F6EA" style={{ fontSize: '3px', fontFamily: 'DM Sans, ui-sans-serif, system-ui, sans-serif', fontWeight: 700 }}>
+          T.BRADY
+        </text>
+      </g>
+
+      {/* Front card: Shohei Ohtani */}
+      <g transform="translate(15.5,4) rotate(8 8.5 17.5)">
+        <rect x="1" y="1" width="15" height="33" rx="2.5" fill="url(#cardTop)" stroke="#1D9E75" strokeWidth="1" />
+        <rect x="2.5" y="2.5" width="12" height="15" rx="1.5" fill="#1F2630" />
+        <rect x="2.5" y="19.5" width="12" height="12.5" rx="1.5" fill="url(#cardBottom)" />
+        <text x="8.5" y="27" textAnchor="middle" fill="#D9F6EA" style={{ fontSize: '2.8px', fontFamily: 'DM Sans, ui-sans-serif, system-ui, sans-serif', fontWeight: 700 }}>
+          OHTANI
+        </text>
+      </g>
+
+      {iconOnly && (
+        <rect x="22.5" y="1.5" width="8" height="4.5" rx="1.5" fill="#1D9E75" opacity="0.9" />
+      )}
     </svg>
   )
 }

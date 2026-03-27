@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { redeemPromoRequest } from '../../lib/promoApi'
 import { supabase } from '../../lib/supabase'
 import { SlabBookLogo } from '../SlabBookLogo'
+import { PromoCodeInput } from '../promo/PromoCodeInput'
 
 const nav = [
   { to: '/dashboard', label: 'Dashboard', end: true },
@@ -49,12 +51,17 @@ function NavIcon ({ name }: { name: (typeof nav)[number]['label'] }) {
 
 export function DashboardLayout () {
   const { user, signOut } = useAuth()
+  const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null)
   const [promoCodeUsed, setPromoCodeUsed] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null)
+  const [promoCode, setPromoCode] = useState('')
+  const [promoTier, setPromoTier] = useState('free')
+  const [applyingPromo, setApplyingPromo] = useState(false)
+  const [promoResult, setPromoResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const loadMembership = useCallback(async (userId: string) => {
     const { data } = await supabase
@@ -118,6 +125,19 @@ export function DashboardLayout () {
     }
   }, [user, loadMembership])
 
+  useEffect(() => {
+    if (!user) return
+    const params = new URLSearchParams(location.search)
+    const promo = params.get('promo')?.trim().toUpperCase() ?? ''
+    const tier = params.get('tier')?.trim().toLowerCase()
+    const mappedTier = tier === 'investor' ? 'lifetime' : tier === 'collector' ? 'collector' : 'free'
+    const timer = window.setTimeout(() => {
+      if (promo) setPromoCode(promo)
+      setPromoTier(mappedTier)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [location.search, user])
+
   function prettyDate (iso: string | null): string | null {
     if (!iso) return null
     const d = new Date(iso)
@@ -128,6 +148,35 @@ export function DashboardLayout () {
   async function handleSignOut () {
     await signOut()
     navigate('/login', { replace: true })
+  }
+
+  async function applyPromoCode () {
+    const code = promoCode.trim()
+    if (!user || !code) return
+    setPromoResult(null)
+    setApplyingPromo(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Missing auth session. Please sign in again.')
+      }
+      const redeem = await redeemPromoRequest(code, session.access_token, promoTier)
+      if (redeem.error) {
+        setPromoResult({ type: 'error', message: redeem.error })
+      } else {
+        setPromoResult({ type: 'success', message: redeem.message ?? 'Promo code applied successfully.' })
+        window.dispatchEvent(new Event('subscription-updated'))
+      }
+    } catch (err) {
+      setPromoResult({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Unable to apply promo code.',
+      })
+    } finally {
+      setApplyingPromo(false)
+    }
   }
 
   const sidebar = (
@@ -161,7 +210,7 @@ export function DashboardLayout () {
           </NavLink>
         ))}
       </nav>
-      <div className="border-t border-[var(--color-border-subtle)] p-4">
+      <div id="promo-upgrade" className="border-t border-[var(--color-border-subtle)] p-4">
         <p className="truncate text-xs text-zinc-500">{user?.email}</p>
         {subscriptionTier && (
           <p className="mt-2">
@@ -179,6 +228,39 @@ export function DashboardLayout () {
         {subscriptionEndsAt && (
           <p className="mt-1 text-[11px] text-zinc-500">Sub ends: {prettyDate(subscriptionEndsAt) ?? subscriptionEndsAt}</p>
         )}
+        <div className="mt-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-2.5">
+          <p className="mb-2 text-[11px] font-medium text-zinc-300">Apply promo code</p>
+          <PromoCodeInput
+            value={promoCode}
+            onChange={setPromoCode}
+            tier={promoTier}
+            userId={user?.id ?? null}
+            id="sidebar-promo-code"
+            placeholder="CODE"
+          />
+          <select
+            value={promoTier}
+            onChange={(e) => setPromoTier(e.target.value)}
+            className="mt-2 h-9 w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-2 text-xs text-[var(--slab-text)] focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20"
+          >
+            <option value="free">Free</option>
+            <option value="collector">Collector</option>
+            <option value="lifetime">Investor / Lifetime</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => void applyPromoCode()}
+            disabled={applyingPromo || !promoCode.trim()}
+            className="mt-2 w-full rounded-lg bg-slab-teal px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
+          >
+            {applyingPromo ? 'Applying…' : 'Apply Code'}
+          </button>
+          {promoResult && (
+            <p className={promoResult.type === 'success' ? 'mt-2 text-[11px] text-slab-teal-light' : 'mt-2 text-[11px] text-red-400'}>
+              {promoResult.message}
+            </p>
+          )}
+        </div>
         {import.meta.env.VITE_GIT_SHA ? (
           <p className="mt-2 font-mono text-[10px] text-zinc-600" title="Vercel build commit">
             Build {import.meta.env.VITE_GIT_SHA.slice(0, 7)}
