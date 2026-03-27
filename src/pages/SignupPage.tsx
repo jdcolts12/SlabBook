@@ -14,6 +14,12 @@ export function SignupPage () {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [promoCode, setPromoCode] = useState(() => searchParams.get('promo')?.trim().toUpperCase() ?? '')
+  const [selectedTier] = useState(() => {
+    const tier = searchParams.get('tier')?.trim().toLowerCase()
+    if (tier === 'investor') return 'lifetime'
+    if (tier === 'collector') return 'collector'
+    return 'free'
+  })
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -53,7 +59,7 @@ export function SignupPage () {
     }
     if (data.session) {
       if (promoCode.trim()) {
-        const redeem = await redeemPromoRequest(promoCode.trim(), data.session.access_token, 'free')
+        const redeem = await redeemPromoRequest(promoCode.trim(), data.session.access_token, selectedTier)
         if (redeem.error) {
           setInfo(`Account created. Promo: ${redeem.error}`)
         }

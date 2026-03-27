@@ -88,6 +88,14 @@ function tierForValidation (t: TierId): string {
   return t
 }
 
+function buildSignupHref (tier: TierId, promoCode: string): string {
+  const params = new URLSearchParams()
+  params.set('tier', tier)
+  const promo = promoCode.trim()
+  if (promo) params.set('promo', promo.toUpperCase())
+  return `/signup?${params.toString()}`
+}
+
 export function PricingSection ({
   selectedTier,
   onSelectTier,
@@ -138,7 +146,7 @@ export function PricingSection ({
                 <p className="mt-2 text-xs text-amber-200/70">Have a code? Enter it below — it applies before checkout.</p>
               </div>
               <Link
-                to="/signup"
+                to={buildSignupHref('investor', promoCode)}
                 className="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-300"
               >
                 Claim Lifetime Access
@@ -167,9 +175,8 @@ export function PricingSection ({
             const active = selectedTier === t.id
             const priced = displayPrice(t.price, promoMeta)
             return (
-              <button
+              <div
                 key={t.id}
-                type="button"
                 onClick={() => onSelectTier(t.id)}
                 className={[
                   'rounded-2xl border p-6 text-left transition',
@@ -201,10 +208,14 @@ export function PricingSection ({
                     <li key={f}>• {f}</li>
                   ))}
                 </ul>
-                <span className="mt-8 inline-block rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950">
+                <Link
+                  to={buildSignupHref(t.id, promoCode)}
+                  className="mt-8 inline-flex items-center justify-center rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {t.cta}
-                </span>
-              </button>
+                </Link>
+              </div>
             )
           })}
         </div>
