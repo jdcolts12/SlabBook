@@ -1,0 +1,121 @@
+import type { Card } from '../../types/card'
+import { cardGainDollars, cardGainPercent, formatGradeLine } from '../../lib/cardMetrics'
+import { formatRelativeTime } from '../../lib/relativeTime'
+import { pctFormatter } from '../../lib/formatters'
+
+type Props = {
+  cards: Card[]
+  money: Intl.NumberFormat
+  refreshingIds: Record<string, boolean>
+  onRefresh: (c: Card) => void
+  onEdit: (c: Card) => void
+  onDelete: (c: Card) => void
+}
+
+function GainCell ({ c, money }: { c: Card; money: Intl.NumberFormat }) {
+  const d = cardGainDollars(c)
+  const p = cardGainPercent(c)
+  if (d == null && p == null) {
+    return <span className="text-zinc-500">—</span>
+  }
+  const pos = d != null && d >= 0
+  return (
+    <div className="text-right">
+      {d != null && (
+        <div className={[pos ? 'text-emerald-400' : 'text-red-400', 'tabular-nums'].join(' ')}>
+          {d >= 0 ? '+' : ''}
+          {money.format(d)}
+        </div>
+      )}
+      {p != null && (
+        <div className="text-[11px] text-zinc-500 tabular-nums">{pctFormatter.format(p / 100)}</div>
+      )}
+    </div>
+  )
+}
+
+export function CollectionTableView ({
+  cards,
+  money,
+  refreshingIds,
+  onRefresh,
+  onEdit,
+  onDelete,
+}: Props) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[960px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-[var(--color-border-subtle)] text-xs uppercase tracking-wider text-zinc-500">
+              <th className="px-3 py-3 font-medium lg:px-4">Player</th>
+              <th className="px-3 py-3 font-medium lg:px-4">Year</th>
+              <th className="px-3 py-3 font-medium lg:px-4">Set</th>
+              <th className="px-3 py-3 font-medium lg:px-4">Grade</th>
+              <th className="px-3 py-3 text-right font-medium lg:px-4">Paid</th>
+              <th className="px-3 py-3 text-right font-medium lg:px-4">Value</th>
+              <th className="px-3 py-3 text-right font-medium lg:px-4">Gain / loss</th>
+              <th className="px-3 py-3 font-medium lg:px-4">Updated</th>
+              <th className="px-3 py-3 text-right font-medium lg:px-4"> </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border-subtle)]">
+            {cards.map((c) => (
+              <tr key={c.id} className="text-zinc-200 hover:bg-white/[0.03]">
+                <td className="px-3 py-3 font-medium text-white lg:px-4">{c.player_name}</td>
+                <td className="px-3 py-3 tabular-nums text-zinc-400 lg:px-4">{c.year ?? '—'}</td>
+                <td className="max-w-[140px] px-3 py-3 text-zinc-400 lg:max-w-[200px] lg:px-4">
+                  <div className="truncate" title={c.set_name ?? undefined}>
+                    {c.set_name ?? '—'}
+                  </div>
+                  {c.card_number && (
+                    <div className="text-[11px] text-zinc-500">#{c.card_number}</div>
+                  )}
+                </td>
+                <td className="px-3 py-3 text-zinc-400 lg:px-4">{formatGradeLine(c)}</td>
+                <td className="px-3 py-3 text-right tabular-nums text-zinc-300 lg:px-4">
+                  {c.purchase_price != null ? money.format(Number(c.purchase_price)) : '—'}
+                </td>
+                <td className="px-3 py-3 text-right tabular-nums text-emerald-300/90 lg:px-4">
+                  {c.current_value != null ? money.format(Number(c.current_value)) : '—'}
+                </td>
+                <td className="px-3 py-3 lg:px-4">
+                  <GainCell c={c} money={money} />
+                </td>
+                <td className="px-3 py-3 text-xs text-zinc-500 lg:px-4">
+                  {formatRelativeTime(c.last_updated)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-3 text-right lg:px-4">
+                  <button
+                    type="button"
+                    onClick={() => void onRefresh(c)}
+                    disabled={Boolean(refreshingIds[c.id])}
+                    className="mr-1 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
+                    title="Refresh market value"
+                    aria-label="Refresh card value"
+                  >
+                    {refreshingIds[c.id] ? '…' : '↻'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(c)}
+                    className="mr-1 rounded-md px-2 py-1 text-emerald-400 hover:bg-white/5 hover:text-emerald-300"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onDelete(c)}
+                    className="rounded-md px-2 py-1 text-zinc-500 hover:bg-red-500/10 hover:text-red-300"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}

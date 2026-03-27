@@ -1,16 +1,26 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CardFormDialog } from '../components/collection/CardFormDialog'
-import { type CardFormValues, variationFromFormValues } from '../lib/cardForm'
+import { CollectionGridView } from '../components/collection/CollectionGridView'
+import { PortfolioSummaryBar } from '../components/collection/PortfolioSummaryBar'
+import { CollectionTableView } from '../components/collection/CollectionTableView'
+import {
+  type GradeFilter,
+  CollectionToolbar,
+  type ViewMode,
+} from '../components/collection/CollectionToolbar'
 import { Toast } from '../components/Toast'
+import { type CardFormValues, variationFromFormValues } from '../lib/cardForm'
+import {
+  computePortfolioMetrics,
+  sortCards,
+  type SortKey,
+} from '../lib/cardMetrics'
+import { moneyFormatter, pctFormatter } from '../lib/formatters'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import type { Card } from '../types/card'
 
-const money = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 2,
-})
+const money = moneyFormatter
 
 type CardValueResponse = {
   average_sale_price: number
@@ -20,19 +30,6 @@ type CardValueResponse = {
   last_sold_price: number
   ebay_search_url: string
   updated_at: string
-}
-
-function formatRelativeTime(value: string | null): string {
-  if (!value) return 'Never'
-  const timestamp = new Date(value).getTime()
-  if (Number.isNaN(timestamp)) return 'Unknown'
-  const diffMs = Date.now() - timestamp
-  const hours = Math.floor(diffMs / (1000 * 60 * 60))
-  if (hours < 1) return 'Updated <1 hour ago'
-  if (hours === 1) return 'Updated 1 hour ago'
-  if (hours < 24) return `Updated ${hours} hours ago`
-  const days = Math.floor(hours / 24)
-  return days === 1 ? 'Updated 1 day ago' : `Updated ${days} days ago`
 }
 
 function parseOptionalNumber (raw: string): number | null {
@@ -71,6 +68,35 @@ function formValuesToPayload (
   }
 }
 
+const VIEW_KEY = 'slabbook.collectionView'
+
+function readStoredView (): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_KEY)
+    return v === 'grid' ? 'grid' : 'table'
+  } catch {
+    return 'table'
+  }
+}
+
+function filterCards (
+  cards: Card[],
+  sport: string,
+  gradeFilter: GradeFilter,
+  gradingCompany: string,
+): Card[] {
+  return cards.filter((c) => {
+    if (sport !== 'all' && c.sport !== sport) return false
+    if (gradeFilter === 'graded' && !c.is_graded) return false
+    if (gradeFilter === 'raw' && c.is_graded) return false
+    if (gradingCompany !== 'all') {
+      if (!c.is_graded) return false
+      if (c.grading_company !== gradingCompany) return false
+    }
+    return true
+  })
+}
+
 export function CollectionPage () {
   const { user } = useAuth()
   const [cards, setCards] = useState<Card[]>([])
@@ -82,6 +108,24 @@ export function CollectionPage () {
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add')
   const [editing, setEditing] = useState<Card | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  const [sortBy, setSortBy] = useState<SortKey>('value')
+  const [sport, setSport] = useState('all')
+  const [gradeFilter, setGradeFilter] = useState<GradeFilter>('all')
+  const [gradingCompany, setGradingCompany] = useState('all')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredView())
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_KEY, viewMode)
+    } catch {
+      /* ignore */
+    }
+  }, [viewMode])
+
+  useEffect(() => {
+    if (gradeFilter === 'raw') setGradingCompany('all')
+  }, [gradeFilter])
 
   const loadCards = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) {
@@ -139,6 +183,41 @@ export function CollectionPage () {
       void supabase.removeChannel(channel)
     }
   }, [user, loadCards])
+
+  const sportOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of cards) {
+      if (c.sport) set.add(c.sport)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [cards])
+
+  const gradingCompanyOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of cards) {
+      if (c.is_graded && c.grading_company) set.add(c.grading_company)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [cards])
+
+  const portfolioMetrics = useMemo(() => computePortfolioMetrics(cards), [cards])
+
+  const filteredCards = useMemo(
+    () => filterCards(cards, sport, gradeFilter, gradingCompany),
+    [cards, sport, gradeFilter, gradingCompany],
+  )
+
+  const visibleCards = useMemo(
+    () => sortCards(filteredCards, sortBy),
+    [filteredCards, sortBy],
+  )
+
+  function resetFilters () {
+    setSport('all')
+    setGradeFilter('all')
+    setGradingCompany('all')
+    setSortBy('value')
+  }
 
   function openAdd () {
     setDialogMode('add')
@@ -251,6 +330,9 @@ export function CollectionPage () {
     }
   }
 
+  const hasCards = cards.length > 0
+  const filterEmpty = hasCards && visibleCards.length === 0
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       {toastMessage && (
@@ -260,7 +342,7 @@ export function CollectionPage () {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Collection</h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Track players, sets, grading, and cost basis — market values can follow from comps later.
+            Portfolio, filters, and market values — switch between table and grid anytime.
           </p>
         </div>
         <button
@@ -289,91 +371,89 @@ export function CollectionPage () {
             aria-label="Loading collection"
           />
         </div>
-      ) : cards.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-700 bg-[var(--color-surface-raised)]/50 px-6 py-16 text-center">
-          <p className="text-zinc-300">No cards yet.</p>
-          <p className="mt-2 text-sm text-zinc-500">Add your first card to start building your portfolio.</p>
+      ) : !hasCards ? (
+        <div className="rounded-2xl border border-dashed border-zinc-700 bg-gradient-to-b from-[var(--color-surface-raised)] to-[var(--color-surface)] px-6 py-20 text-center sm:py-24">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 ring-1 ring-emerald-500/25">
+            <svg className="h-8 w-8 text-emerald-400/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v9m3-3.75h-3.75m3.75 3.75H21"
+              />
+            </svg>
+          </div>
+          <h2 className="mt-8 text-xl font-semibold text-white">Start your slab collection</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-zinc-400">
+            Add your first card to track purchase price, grading, and live comps. Your portfolio summary and
+            gain/loss will show up here automatically.
+          </p>
           <button
             type="button"
             onClick={openAdd}
-            className="mt-6 rounded-lg bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25"
+            className="mt-10 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-8 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400"
           >
-            Add a card
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add your first card
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-[var(--color-border-subtle)] text-xs uppercase tracking-wider text-zinc-500">
-                  <th className="px-4 py-3 font-medium">Player</th>
-                  <th className="px-4 py-3 font-medium">Set / #</th>
-                  <th className="px-4 py-3 font-medium">Grading</th>
-                  <th className="px-4 py-3 font-medium text-right">Purchase</th>
-                  <th className="px-4 py-3 font-medium text-right">Value</th>
-                  <th className="px-4 py-3 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-border-subtle)]">
-                {cards.map((c) => (
-                  <tr key={c.id} className="text-zinc-200 hover:bg-white/[0.03]">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-white">{c.player_name}</div>
-                      {c.year != null && <div className="text-xs text-zinc-500">{c.year}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      <div>{c.set_name ?? '—'}</div>
-                      <div className="text-xs text-zinc-500">{c.card_number ?? '—'}</div>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      {c.is_graded ? (
-                        <>
-                          <div>{[c.grading_company, c.grade].filter(Boolean).join(' ') || 'Graded'}</div>
-                        </>
-                      ) : (
-                        <span className="text-zinc-500">Raw</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-zinc-300">
-                      {c.purchase_price != null ? money.format(Number(c.purchase_price)) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-emerald-300/90">
-                      {c.current_value != null ? money.format(Number(c.current_value)) : '—'}
-                      <div className="mt-1 text-[11px] text-zinc-500">{formatRelativeTime(c.last_updated)}</div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => void refreshSingleCardValue(c)}
-                        disabled={Boolean(refreshingIds[c.id])}
-                        className="mr-2 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
-                        title="Refresh market value"
-                        aria-label="Refresh card value"
-                      >
-                        {refreshingIds[c.id] ? '...' : '↻'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openEdit(c)}
-                        className="mr-2 rounded-md px-2 py-1 text-emerald-400 hover:bg-white/5 hover:text-emerald-300"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(c)}
-                        className="rounded-md px-2 py-1 text-zinc-500 hover:bg-red-500/10 hover:text-red-300"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <>
+          <PortfolioSummaryBar
+            metrics={portfolioMetrics}
+            loading={false}
+            money={money}
+            pct={pctFormatter}
+          />
+
+          <CollectionToolbar
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            sport={sport}
+            onSportChange={setSport}
+            sportOptions={sportOptions}
+            gradeFilter={gradeFilter}
+            onGradeFilterChange={setGradeFilter}
+            gradingCompany={gradingCompany}
+            onGradingCompanyChange={setGradingCompany}
+            gradingCompanyOptions={gradingCompanyOptions}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
+
+          {filterEmpty ? (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-6 py-12 text-center">
+              <p className="text-zinc-200">No cards match your filters.</p>
+              <p className="mt-2 text-sm text-zinc-500">Try widening sport, grade, or company filters.</p>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="mt-6 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/15 hover:bg-white/15"
+              >
+                Reset filters
+              </button>
+            </div>
+          ) : viewMode === 'table' ? (
+            <CollectionTableView
+              cards={visibleCards}
+              money={money}
+              refreshingIds={refreshingIds}
+              onRefresh={refreshSingleCardValue}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+            />
+          ) : (
+            <CollectionGridView
+              cards={visibleCards}
+              money={money}
+              refreshingIds={refreshingIds}
+              onRefresh={refreshSingleCardValue}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+            />
+          )}
+        </>
       )}
 
       <CardFormDialog
