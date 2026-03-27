@@ -13,7 +13,8 @@ type ApiResponse = {
 }
 
 function getJson (body: unknown): Record<string, unknown> {
-  if (body && typeof body === 'object' && !Buffer.isBuffer(body)) return body as Record<string, unknown>
+  const isBufferBody = typeof Buffer !== 'undefined' && Buffer.isBuffer(body)
+  if (body && typeof body === 'object' && !isBufferBody) return body as Record<string, unknown>
   if (typeof body === 'string') {
     try {
       return JSON.parse(body) as Record<string, unknown>
