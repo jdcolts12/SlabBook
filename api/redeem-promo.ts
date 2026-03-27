@@ -1,11 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import {
-  buildUserUpdateFromPromo,
-  discountHumanLabel,
-  normalizePromoCode,
-  type PromoCodeRow,
-  validatePromoCode,
-} from './lib/promo'
 
 type ApiRequest = {
   method?: string
@@ -16,6 +9,18 @@ type ApiRequest = {
 type ApiResponse = {
   setHeader: (name: string, value: string) => void
   status: (code: number) => { json: (body: unknown) => void }
+}
+
+type PromoCodeRow = {
+  id: string
+  code: string
+  type: string
+  value: number | null
+  applicable_tier: string
+  max_uses: number | null
+  uses_count: number
+  expires_at: string | null
+  is_active: boolean
 }
 
 function getBearerToken (authHeader?: string): string | null {
@@ -36,6 +41,92 @@ function getJson (body: unknown): Record<string, unknown> {
     }
   }
   return {}
+}
+
+function normalizePromoCode (raw: string): string {
+  return raw.trim().toUpperCase()
+}
+
+function discountHumanLabel (row: PromoCodeRow): string {
+  switch (row.type) {
+    case 'lifetime_free':
+      return 'Lifetime membership free'
+    case 'free_months':
+      return `${Number(row.value ?? 0)} months free`
+    case 'percent_off':
+      if (Number(row.value) >= 100) return 'First month free'
+      return `${Number(row.value)}% off`
+    case 'fixed_off':
+      return `$${Number(row.value ?? 0)} off`
+    default:
+      return row.code
+  }
+}
+
+function discountSuccessMessage (row: PromoCodeRow): string {
+  switch (row.type) {
+    case 'lifetime_free':
+      return 'Lifetime access applied!'
+    case 'free_months':
+      return `${Number(row.value ?? 0)} months free applied!`
+    case 'percent_off':
+      if (Number(row.value) >= 100) return 'First month free applied!'
+      return `${Number(row.value)}% discount applied!`
+    case 'fixed_off':
+      return `$${Number(row.value ?? 0)} off applied!`
+    default:
+      return 'Promo applied!'
+  }
+}
+
+function buildUserUpdateFromPromo (row: PromoCodeRow, now = new Date()): Record<string, unknown> {
+  switch (row.type) {
+    case 'lifetime_free':
+      return {
+        subscription_tier: 'lifetime',
+        subscription_ends_at: null,
+        trial_ends_at: null,
+        promo_code_used: row.code,
+      }
+    case 'free_months': {
+      const months = Number(row.value ?? 0)
+      const end = new Date(now)
+      end.setMonth(end.getMonth() + months)
+      return {
+        subscription_tier: 'collector',
+        trial_ends_at: end.toISOString(),
+        promo_code_used: row.code,
+      }
+    }
+    case 'percent_off': {
+      const v = Number(row.value ?? 0)
+      if (v >= 100) {
+        const end = new Date(now)
+        end.setMonth(end.getMonth() + 1)
+        return {
+          subscription_tier: 'collector',
+          trial_ends_at: end.toISOString(),
+          promo_code_used: row.code,
+        }
+      }
+      if (row.applicable_tier === 'lifetime') {
+        return {
+          subscription_tier: 'investor',
+          subscription_ends_at: null,
+          trial_ends_at: null,
+          promo_code_used: row.code,
+        }
+      }
+      return {
+        subscription_tier: 'collector',
+        promo_code_used: row.code,
+      }
+    }
+    case 'fixed_off':
+      return { promo_code_used: row.code }
+    default:
+      return { promo_code_used: row.code }
+  }
 }
 
 export default async function handler (req: ApiRequest, res: ApiResponse) {
@@ -74,23 +165,40 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const codeRaw = typeof json.code === 'string' ? json.code : ''
     const tier = typeof json.tier === 'string' ? json.tier : undefined
 
-    const result = await validatePromoCode(admin, codeRaw, { tier, userId: user.id })
-
-    if (!result.valid) {
-      return res.status(400).json({ error: result.error })
+    const code = normalizePromoCode(codeRaw)
+    if (!code) {
+      return res.status(400).json({ error: 'Code not found' })
     }
 
-    const { data: row, error: fetchErr } = await admin
-      .from('promo_codes')
-      .select('*')
-      .eq('id', result.promo_code_id)
-      .single()
-
-    if (fetchErr || !row) {
-      return res.status(500).json({ error: fetchErr?.message ?? 'Promo lookup failed.' })
+    const { data: row, error: promoErr } = await admin.from('promo_codes').select('*').eq('code', code).maybeSingle()
+    if (promoErr || !row) {
+      return res.status(400).json({ error: 'Code not found' })
     }
-
     const promo = row as PromoCodeRow
+
+    if (!promo.is_active) {
+      return res.status(400).json({ error: 'Code expired' })
+    }
+    if (promo.expires_at && new Date(promo.expires_at).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Code expired' })
+    }
+    if (promo.max_uses != null && promo.uses_count >= promo.max_uses) {
+      return res.status(400).json({ error: 'Code expired' })
+    }
+
+    if (promo.applicable_tier !== 'any' && tier && tier !== 'free' && promo.applicable_tier !== tier) {
+      return res.status(400).json({ error: 'Code not found' })
+    }
+
+    const { data: existing } = await admin
+      .from('promo_redemptions')
+      .select('id')
+      .eq('promo_code_id', promo.id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (existing) {
+      return res.status(400).json({ error: 'Code already used' })
+    }
     const discount_applied = discountHumanLabel(promo)
     const userUpdate = buildUserUpdateFromPromo(promo)
 
@@ -120,7 +228,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
 
     return res.status(200).json({
       ok: true,
-      message: result.message,
+      message: discountSuccessMessage(promo),
       discount_applied,
       code: normalizePromoCode(promo.code),
     })
