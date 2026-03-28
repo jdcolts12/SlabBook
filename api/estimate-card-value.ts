@@ -181,7 +181,8 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     })
 
     if (histErr) {
-      return res.status(500).json({ error: histErr.message })
+      // Card row is already updated; history is auxiliary — don't fail the estimate
+      console.error('[estimate-card-value] price_history insert skipped:', histErr.message)
     }
 
     return res.status(200).json({

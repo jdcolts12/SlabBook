@@ -54,7 +54,11 @@ Consider:
 - Set prestige (Prizm, Optic, Topps Chrome etc)
 - Grade premium (PSA 10 vs PSA 9 price gap)
 
-Return ONLY this JSON object, nothing else:
+Return ONLY this JSON object, nothing else (no markdown fences, no commentary):
+- low, mid, high: plain JSON numbers only (no $ or commas)
+- confidence: exactly one of "high", "medium", "low" (lowercase)
+- trend: exactly one of "rising", "stable", "declining" (lowercase)
+
 {
   "low": number,
   "mid": number,
@@ -76,29 +80,88 @@ function extractJsonObject (raw: string): string {
   return t
 }
 
+/** Accept plain numbers or strings like "$1,234" / "1234.50" */
+function parseEstimateNumber (value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[$,\s]/g, '').trim()
+    if (!cleaned) return null
+    const n = Number.parseFloat(cleaned)
+    if (Number.isFinite(n) && n >= 0) return n
+  }
+  return null
+}
+
+function normalizeConfidence (value: unknown): 'high' | 'medium' | 'low' {
+  const s = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (s === 'high' || s === 'very high') return 'high'
+  if (s === 'medium' || s === 'med' || s === 'moderate' || s === 'average') return 'medium'
+  if (s === 'low') return 'low'
+  return 'medium'
+}
+
+function normalizeTrend (value: unknown): 'rising' | 'stable' | 'declining' {
+  const s = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (
+    s === 'rising' ||
+    s === 'up' ||
+    s === 'increasing' ||
+    s === 'growing' ||
+    s === 'bullish'
+  ) {
+    return 'rising'
+  }
+  if (
+    s === 'declining' ||
+    s === 'down' ||
+    s === 'falling' ||
+    s === 'decreasing' ||
+    s === 'bearish'
+  ) {
+    return 'declining'
+  }
+  if (
+    s === 'stable' ||
+    s === 'flat' ||
+    s === 'sideways' ||
+    s === 'steady' ||
+    s === 'neutral' ||
+    s === 'unchanged'
+  ) {
+    return 'stable'
+  }
+  return 'stable'
+}
+
 function normalizeEstimate (parsed: Record<string, unknown>): CardEstimateResult | null {
-  const low = Number(parsed.low)
-  const mid = Number(parsed.mid)
-  const high = Number(parsed.high)
-  if (![low, mid, high].every((n) => Number.isFinite(n) && n >= 0)) return null
+  let low = parseEstimateNumber(parsed.low)
+  let mid = parseEstimateNumber(parsed.mid)
+  let high = parseEstimateNumber(parsed.high)
+  if (low == null || mid == null || high == null) return null
 
-  const confidence = parsed.confidence
-  const trend = parsed.trend
-  const reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning.trim() : ''
+  if (low > high) {
+    const t = low
+    low = high
+    high = t
+  }
+  mid = Math.min(high, Math.max(low, mid))
+
+  const reasoning =
+    typeof parsed.reasoning === 'string' && parsed.reasoning.trim()
+      ? parsed.reasoning.trim()
+      : 'Estimate from card details and typical market behavior for this type of card.'
   const data_source =
-    typeof parsed.data_source === 'string' ? parsed.data_source.trim() : 'Claude AI estimate'
-
-  if (confidence !== 'high' && confidence !== 'medium' && confidence !== 'low') return null
-  if (trend !== 'rising' && trend !== 'stable' && trend !== 'declining') return null
-  if (!reasoning) return null
+    typeof parsed.data_source === 'string' && parsed.data_source.trim()
+      ? parsed.data_source.trim()
+      : 'Claude AI estimate'
 
   return {
     low: Math.round(low * 100) / 100,
     mid: Math.round(mid * 100) / 100,
     high: Math.round(high * 100) / 100,
-    confidence,
+    confidence: normalizeConfidence(parsed.confidence),
     reasoning,
-    trend,
+    trend: normalizeTrend(parsed.trend),
     data_source,
   }
 }
@@ -153,7 +216,11 @@ export async function getCardValue (
 
   const estimate = normalizeEstimate(parsed)
   if (!estimate) {
-    return { ok: false, error: 'Claude returned invalid estimate shape.' }
+    return {
+      ok: false,
+      error:
+        'Claude returned JSON but low, mid, and high must be non-negative numbers (or numeric strings).',
+    }
   }
 
   return { ok: true, estimate }
