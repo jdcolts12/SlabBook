@@ -32,3 +32,6 @@ create policy "Users select own card price history"
         and c.user_id = auth.uid ()
     )
   );
+
+-- Refresh PostgREST schema cache so the API sees new columns (fixes "schema cache" errors)
+notify pgrst, 'reload schema';
