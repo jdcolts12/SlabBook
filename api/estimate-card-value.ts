@@ -22,11 +22,19 @@ function getBearerToken (authHeader?: string): string | null {
 }
 
 function getJson (body: unknown): Record<string, unknown> {
+  if (body == null || body === '') return {}
   const isBufferBody = typeof Buffer !== 'undefined' && Buffer.isBuffer(body)
   if (body && typeof body === 'object' && !isBufferBody) return body as Record<string, unknown>
   if (typeof body === 'string') {
     try {
       return JSON.parse(body) as Record<string, unknown>
+    } catch {
+      return {}
+    }
+  }
+  if (isBufferBody) {
+    try {
+      return JSON.parse(body.toString('utf8')) as Record<string, unknown>
     } catch {
       return {}
     }

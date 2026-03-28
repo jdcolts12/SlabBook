@@ -32,6 +32,7 @@ export type CardEstimateResult = {
 
 const SYSTEM_PROMPT = `You are an expert sports card pricing analyst with deep knowledge of the NFL, NBA, and MLB trading card market. You have extensive knowledge of eBay sold listings, PSA population data, and collector demand trends for cards up to your training cutoff. Your job is to estimate current market values for sports cards. Always return honest estimates with appropriate confidence levels. Never fabricate specific sale prices.`
 
+/** Plain object (not `as const`) so JSON.stringify matches Anthropic's JSON Schema expectations */
 const SUBMIT_CARD_ESTIMATE_TOOL = {
   name: 'submit_card_estimate',
   description:
@@ -72,7 +73,7 @@ const SUBMIT_CARD_ESTIMATE_TOOL = {
     },
     required: ['low', 'mid', 'high', 'confidence', 'reasoning', 'trend'],
   },
-} as const
+}
 
 function buildUserPrompt (card: CardEstimateInput): string {
   const gradeLine = card.is_graded
@@ -249,16 +250,31 @@ type AnthropicContentBlock = {
   type?: string
   text?: string
   name?: string
-  input?: Record<string, unknown>
+  input?: Record<string, unknown> | string
+}
+
+/** Anthropic sometimes delivers tool `input` as a JSON string */
+function coerceToolInput (input: unknown): Record<string, unknown> | null {
+  if (input != null && typeof input === 'object' && !Array.isArray(input)) {
+    return input as Record<string, unknown>
+  }
+  if (typeof input === 'string') {
+    try {
+      const p = JSON.parse(input) as unknown
+      if (p != null && typeof p === 'object' && !Array.isArray(p)) return p as Record<string, unknown>
+    } catch {
+      return null
+    }
+  }
+  return null
 }
 
 function recordFromToolUseBlocks (content: AnthropicContentBlock[] | undefined): Record<string, unknown> | null {
   if (!content?.length) return null
   for (const b of content) {
     if (b?.type !== 'tool_use') continue
-    const inp = b.input
-    if (!inp || typeof inp !== 'object') continue
-    const rec = inp as Record<string, unknown>
+    const rec = coerceToolInput(b.input)
+    if (!rec) continue
     const { low, mid, high } = pickEstimateFields(rec)
     if (low != null && mid != null && high != null) return rec
     if (b.name === 'submit_card_estimate' && Object.keys(rec).length > 0) return rec
@@ -342,30 +358,52 @@ export async function getCardValue (
     return { res, payload }
   }
 
-  let { res: anthropicResponse, payload } = await callAnthropic(useTools ? bodyWithTools : bodyTextOnly)
+  let anthropicResponse: Response
+  let payload: AnthropicPayload | null
 
-  if (!anthropicResponse.ok && useTools && anthropicResponse.status === 400) {
-    const hint = payload?.error?.message ?? ''
-    if (/tool/i.test(hint) || /schema/i.test(hint)) {
+  if (useTools) {
+    const first = await callAnthropic(bodyWithTools)
+    anthropicResponse = first.res
+    payload = first.payload
+
+    const errMsg = payload?.error?.message ?? ''
+    if (
+      !anthropicResponse.ok &&
+      (anthropicResponse.status === 400 || anthropicResponse.status === 404) &&
+      (/tool|schema|model|not_found/i.test(errMsg) || anthropicResponse.status === 404)
+    ) {
       const second = await callAnthropic(bodyTextOnly)
       anthropicResponse = second.res
       payload = second.payload
     }
+  } else {
+    const r = await callAnthropic(bodyTextOnly)
+    anthropicResponse = r.res
+    payload = r.payload
   }
 
   if (!anthropicResponse.ok) {
     const msg = payload?.error?.message || payload?.message || 'Claude API request failed.'
-    return { ok: false, error: msg }
+    return { ok: false, error: `[${anthropicResponse.status}] ${msg}` }
   }
 
-  const record =
+  let record =
     recordFromToolUseBlocks(payload?.content) ?? recordFromTextBlocks(payload?.content)
+
+  if (!record && useTools) {
+    const fallback = await callAnthropic(bodyTextOnly)
+    if (fallback.res.ok) {
+      record =
+        recordFromToolUseBlocks(fallback.payload?.content) ??
+        recordFromTextBlocks(fallback.payload?.content)
+    }
+  }
 
   if (!record) {
     return {
       ok: false,
       error: useTools
-        ? 'Could not read an estimate from Claude (no tool result and no parseable JSON). Retry, or set PRICING_SKIP_TOOL_USE=1 for JSON-only mode.'
+        ? 'Could not read an estimate from Claude (no tool result and no parseable JSON). Set PRICING_SKIP_TOOL_USE=1 on the server to force JSON-only, or check ANTHROPIC_MODEL.'
         : 'Could not read an estimate from Claude (response was not valid JSON).',
     }
   }
