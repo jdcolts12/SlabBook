@@ -5,6 +5,7 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { AIInsightsPage } from './pages/AIInsightsPage'
 import { CollectionPage } from './pages/CollectionPage'
 import { DashboardHomePage } from './pages/DashboardHomePage'
+import { MarketValuesPage } from './pages/MarketValuesPage'
 import { AdminPage } from './pages/AdminPage'
 import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
@@ -32,6 +33,7 @@ function App () {
           >
             <Route index element={<DashboardHomePage />} />
             <Route path="collection" element={<CollectionPage />} />
+            <Route path="market-values" element={<MarketValuesPage />} />
             <Route path="insights" element={<AIInsightsPage />} />
             <Route
               path="alerts"
