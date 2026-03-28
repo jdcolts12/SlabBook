@@ -135,6 +135,11 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       })
     }
 
+    const gradeDisplay =
+      card.is_graded
+        ? [card.grading_company?.trim(), card.grade?.trim()].filter(Boolean).join(' ') || null
+        : null
+
     const estimateInput: CardEstimateInput = {
       player_name: card.player_name,
       year: card.year,
@@ -144,6 +149,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       sport: card.sport,
       is_graded: card.is_graded,
       grade: parseGradeNumber(card.grade),
+      grade_display: gradeDisplay,
       grading_company: card.grading_company,
       condition: card.condition,
     }
