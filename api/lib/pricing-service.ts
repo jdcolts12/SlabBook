@@ -1,7 +1,6 @@
 /**
- * Central pricing entry point. Currently uses Claude for market estimates.
- * TODO: Replace getCardValue implementation with a real pricing API (e.g. 130point, eBay sold API)
- * when available — callers should keep using this module only.
+ * Central pricing entry point. Uses Claude with web search + structured estimate tool.
+ * TODO: Replace getCardValue implementation with a dedicated pricing API when available.
  */
 
 export type CardEstimateInput = {
@@ -30,13 +29,19 @@ export type CardEstimateResult = {
   data_source: string
 }
 
-const SYSTEM_PROMPT = `You are an expert sports card pricing analyst with deep knowledge of the NFL, NBA, and MLB trading card market. You have extensive knowledge of eBay sold listings, PSA population data, and collector demand trends for cards up to your training cutoff. Your job is to estimate current market values for sports cards. Always return honest estimates with appropriate confidence levels. Never fabricate specific sale prices.`
+const SYSTEM_PROMPT = `You are an expert sports card pricing analyst for NFL, NBA, and MLB cards. You use web search to find recent eBay sold and listing data when estimating values. Ground your low/mid/high range in what you find; if sold comps are sparse, say so in reasoning and use wider ranges with lower confidence. Never invent specific sold prices—only ranges informed by search results or clear market tiers.`
 
-/** Plain object (not `as const`) so JSON.stringify matches Anthropic's JSON Schema expectations */
+/** Anthropic server tool — executed by Anthropic (see web search tool docs) */
+const WEB_SEARCH_TOOL = {
+  type: 'web_search_20250305',
+  name: 'web_search',
+} as const
+
+/** Client-executed structured output tool */
 const SUBMIT_CARD_ESTIMATE_TOOL = {
   name: 'submit_card_estimate',
   description:
-    'Submit the final USD value range and metadata for the sports card. Call this once with your best estimate.',
+    'Submit the final USD value range and metadata for the sports card. Call this exactly once after you have used web_search to check eBay sold/listing data.',
   input_schema: {
     type: 'object',
     properties: {
@@ -59,7 +64,7 @@ const SUBMIT_CARD_ESTIMATE_TOOL = {
       },
       reasoning: {
         type: 'string',
-        description: 'One concise sentence explaining the estimate',
+        description: 'One concise sentence; mention if grounded in eBay sold search results',
       },
       trend: {
         type: 'string',
@@ -95,14 +100,11 @@ Graded: ${card.is_graded}
 Grade / slab: ${gradeLine}
 Condition if raw: ${card.condition ?? 'N/A'}
 
-Consider:
-- Recent eBay sold listing ranges for this card (conceptually, not fabricated exact comps)
-- Scarcity at this grade if graded
-- Current player performance and market demand
-- Set prestige (Prizm, Optic, Topps Chrome, etc.)
-- Grade premium (PSA 10 vs PSA 9, etc.)
+Workflow (required):
+1. Use the web_search tool one or more times with queries aimed at eBay sold / completed listings for this player, year, set, and card (e.g. "eBay sold [player] [year] [set] [card #] graded PSA").
+2. After reviewing search results, call submit_card_estimate exactly once with low, mid, high in USD and honest confidence.
 
-Use the submit_card_estimate tool exactly once with dollar amounts as plain numbers (USD, not cents).`
+If search finds no relevant sold data, still submit an estimate with wider range and lower confidence, and say so in reasoning.`
 }
 
 function extractJsonFromFencedOrSlice (raw: string): string {
@@ -309,9 +311,14 @@ function recordFromTextBlocks (content: AnthropicContentBlock[] | undefined): Re
 
 type AnthropicPayload = {
   content?: AnthropicContentBlock[]
+  stop_reason?: string
   error?: { message?: string }
   message?: string
 }
+
+type MessageRow = { role: 'user' | 'assistant'; content: unknown }
+
+const PAUSE_TURN_MAX = 8
 
 export async function getCardValue (
   card: CardEstimateInput,
@@ -324,21 +331,15 @@ export async function getCardValue (
       ? process.env.ANTHROPIC_MODEL.trim()
       : 'claude-sonnet-4-20250514'
 
-  const useTools = process.env.PRICING_SKIP_TOOL_USE !== '1'
+  const skipWebSearch = process.env.PRICING_SKIP_WEB_SEARCH === '1'
+  const useSubmitTool = process.env.PRICING_SKIP_TOOL_USE !== '1'
 
-  const bodyWithTools = {
-    model,
-    max_tokens: 2048,
-    temperature: 0.2,
-    system: SYSTEM_PROMPT,
-    tools: [SUBMIT_CARD_ESTIMATE_TOOL],
-    tool_choice: { type: 'tool', name: 'submit_card_estimate' },
-    messages: [{ role: 'user', content: userPrompt }],
-  }
+  const toolsWithWeb = [WEB_SEARCH_TOOL, SUBMIT_CARD_ESTIMATE_TOOL]
+  const toolsSubmitOnly = [SUBMIT_CARD_ESTIMATE_TOOL]
 
   const bodyTextOnly = {
     model,
-    max_tokens: 2048,
+    max_tokens: 8192,
     temperature: 0.2,
     system: `${SYSTEM_PROMPT} Return ONLY one JSON object, no markdown, with keys low, mid, high (numbers), confidence, reasoning, trend, data_source.`,
     messages: [{ role: 'user', content: `${userPrompt}\n\nReturn only valid JSON.` }],
@@ -358,11 +359,61 @@ export async function getCardValue (
     return { res, payload }
   }
 
+  async function runWithPauseTurn (base: {
+    model: string
+    max_tokens: number
+    temperature: number
+    system: string
+    tools: object[]
+    tool_choice?: object
+    messages: MessageRow[]
+  }): Promise<{ res: Response; payload: AnthropicPayload | null }> {
+    const messages: MessageRow[] = [...base.messages]
+    let lastOut: { res: Response; payload: AnthropicPayload | null } | undefined
+
+    for (let i = 0; i < PAUSE_TURN_MAX; i++) {
+      const body: Record<string, unknown> = {
+        model: base.model,
+        max_tokens: base.max_tokens,
+        temperature: base.temperature,
+        system: base.system,
+        tools: base.tools,
+        messages,
+      }
+      if (base.tool_choice) body.tool_choice = base.tool_choice
+
+      const out = await callAnthropic(body)
+      lastOut = out
+      if (!out.res.ok) return out
+
+      const stop = out.payload?.stop_reason
+      if (stop !== 'pause_turn' || !out.payload?.content) {
+        return out
+      }
+
+      messages.push({ role: 'assistant', content: out.payload.content })
+    }
+
+    return (
+      lastOut ?? {
+        res: new Response(null, { status: 500 }),
+        payload: { error: { message: 'Web search turn limit exceeded (pause_turn).' } },
+      }
+    )
+  }
+
   let anthropicResponse: Response
   let payload: AnthropicPayload | null
 
-  if (useTools) {
-    const first = await callAnthropic(bodyWithTools)
+  if (useSubmitTool && !skipWebSearch) {
+    const first = await runWithPauseTurn({
+      model,
+      max_tokens: 8192,
+      temperature: 0.2,
+      system: SYSTEM_PROMPT,
+      tools: toolsWithWeb,
+      messages: [{ role: 'user', content: userPrompt }],
+    })
     anthropicResponse = first.res
     payload = first.payload
 
@@ -370,12 +421,32 @@ export async function getCardValue (
     if (
       !anthropicResponse.ok &&
       (anthropicResponse.status === 400 || anthropicResponse.status === 404) &&
-      (/tool|schema|model|not_found/i.test(errMsg) || anthropicResponse.status === 404)
+      (/web_search|tool|schema|model|not_found/i.test(errMsg) || anthropicResponse.status === 404)
     ) {
-      const second = await callAnthropic(bodyTextOnly)
+      const second = await runWithPauseTurn({
+        model,
+        max_tokens: 8192,
+        temperature: 0.2,
+        system: SYSTEM_PROMPT,
+        tools: toolsSubmitOnly,
+        tool_choice: { type: 'tool', name: 'submit_card_estimate' },
+        messages: [{ role: 'user', content: userPrompt }],
+      })
       anthropicResponse = second.res
       payload = second.payload
     }
+  } else if (useSubmitTool && skipWebSearch) {
+    const r = await runWithPauseTurn({
+      model,
+      max_tokens: 4096,
+      temperature: 0.2,
+      system: SYSTEM_PROMPT,
+      tools: toolsSubmitOnly,
+      tool_choice: { type: 'tool', name: 'submit_card_estimate' },
+      messages: [{ role: 'user', content: userPrompt }],
+    })
+    anthropicResponse = r.res
+    payload = r.payload
   } else {
     const r = await callAnthropic(bodyTextOnly)
     anthropicResponse = r.res
@@ -390,7 +461,7 @@ export async function getCardValue (
   let record =
     recordFromToolUseBlocks(payload?.content) ?? recordFromTextBlocks(payload?.content)
 
-  if (!record && useTools) {
+  if (!record && useSubmitTool && !skipWebSearch) {
     const fallback = await callAnthropic(bodyTextOnly)
     if (fallback.res.ok) {
       record =
@@ -402,8 +473,8 @@ export async function getCardValue (
   if (!record) {
     return {
       ok: false,
-      error: useTools
-        ? 'Could not read an estimate from Claude (no tool result and no parseable JSON). Set PRICING_SKIP_TOOL_USE=1 on the server to force JSON-only, or check ANTHROPIC_MODEL.'
+      error: useSubmitTool
+        ? 'Could not read an estimate from Claude (no submit_card_estimate tool result and no parseable JSON). Enable web search in the Anthropic Console, set PRICING_SKIP_WEB_SEARCH=1 to disable search, or PRICING_SKIP_TOOL_USE=1 for JSON-only.'
         : 'Could not read an estimate from Claude (response was not valid JSON).',
     }
   }
