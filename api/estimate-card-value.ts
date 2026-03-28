@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { getCardValue, type CardEstimateInput } from './lib/pricing-service'
 
+/** Web search + Claude often exceed the default ~10s Vercel limit (non-JSON 500/504 HTML otherwise). */
+export const config = {
+  maxDuration: 60,
+}
+
 const CACHE_MS = 48 * 60 * 60 * 1000
 
 type ApiRequest = {

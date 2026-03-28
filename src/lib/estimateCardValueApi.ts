@@ -45,7 +45,11 @@ export async function postEstimateCardValue (
   try {
     data = raw ? (JSON.parse(raw) as EstimateCardValueResponse) : data
   } catch {
-    return { ...data, error: `Invalid response (${res.status})` }
+    const looksLikeHtml = /^\s*</.test(raw)
+    const hint = looksLikeHtml
+      ? 'Server returned a non-JSON page (often a Vercel timeout or crash). In Vercel: increase this function max duration (60s) and check logs for /api/estimate-card-value.'
+      : 'Response was not valid JSON.'
+    return { ...data, error: `${hint} HTTP ${res.status}.` }
   }
 
   if (!res.ok) {
