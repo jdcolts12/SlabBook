@@ -1,11 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { getCardValue, type CardEstimateInput } from './lib/pricing-service'
 
-/** Web search + Claude often exceed the default ~10s Vercel limit (non-JSON 500/504 HTML otherwise). */
-export const config = {
-  maxDuration: 60,
-}
-
 const CACHE_MS = 48 * 60 * 60 * 1000
 
 type ApiRequest = {
@@ -71,6 +66,11 @@ type CardRow = {
   pricing_source: string | null
 }
 
+function jsonError (res: ApiResponse, status: number, error: string) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  return res.status(status).json({ error })
+}
+
 export default async function handler (req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'POST') {
@@ -83,10 +83,10 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY
 
     if (!supabaseUrl || !supabaseServiceRole) {
-      return res.status(500).json({ error: 'Missing Supabase server configuration.' })
+      return jsonError(res, 500, 'Missing Supabase server configuration.')
     }
     if (!anthropicApiKey) {
-      return res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY.' })
+      return jsonError(res, 500, 'Missing ANTHROPIC_API_KEY.')
     }
 
     const token = getBearerToken(req.headers?.authorization)
@@ -167,9 +167,17 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       condition: card.condition,
     }
 
-    const result = await getCardValue(estimateInput, anthropicApiKey)
+    let result: Awaited<ReturnType<typeof getCardValue>>
+    try {
+      result = await getCardValue(estimateInput, anthropicApiKey)
+    } catch (pricingErr) {
+      const msg =
+        pricingErr instanceof Error ? pricingErr.message : 'Pricing service threw an unexpected error.'
+      console.error('[estimate-card-value] getCardValue:', pricingErr)
+      return jsonError(res, 502, msg)
+    }
     if (!result.ok) {
-      return res.status(502).json({ error: result.error })
+      return jsonError(res, 502, result.error)
     }
 
     const { estimate } = result
@@ -189,7 +197,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const { error: upErr } = await admin.from('cards').update(updatePayload).eq('id', card.id)
 
     if (upErr) {
-      return res.status(500).json({ error: upErr.message })
+      return jsonError(res, 500, upErr.message)
     }
 
     const { error: histErr } = await admin.from('price_history').insert({
@@ -218,6 +226,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Estimate failed.'
-    return res.status(500).json({ error: message })
+    console.error('[estimate-card-value] unhandled:', error)
+    return jsonError(res, 500, message)
   }
 }

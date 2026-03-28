@@ -324,6 +324,19 @@ export async function getCardValue (
   card: CardEstimateInput,
   anthropicApiKey: string,
 ): Promise<{ ok: true; estimate: CardEstimateResult } | { ok: false; error: string }> {
+  try {
+    return await getCardValueInner(card, anthropicApiKey)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unexpected pricing error.'
+    console.error('[pricing-service] getCardValue:', e)
+    return { ok: false, error: msg }
+  }
+}
+
+async function getCardValueInner (
+  card: CardEstimateInput,
+  anthropicApiKey: string,
+): Promise<{ ok: true; estimate: CardEstimateResult } | { ok: false; error: string }> {
   const userPrompt = buildUserPrompt(card)
 
   const model =
@@ -346,6 +359,21 @@ export async function getCardValue (
   }
 
   async function callAnthropic (body: object): Promise<{ res: Response; payload: AnthropicPayload | null }> {
+    let serialized: string
+    try {
+      serialized = JSON.stringify(body)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'serialize failed'
+      console.error('[pricing-service] JSON.stringify(messages) failed:', msg)
+      return {
+        res: new Response(JSON.stringify({ error: { message: msg } }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        }),
+        payload: { error: { message: `Request serialization failed: ${msg}` } },
+      }
+    }
+
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -353,7 +381,7 @@ export async function getCardValue (
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: serialized,
     })
     const payload = (await res.json().catch(() => null)) as AnthropicPayload | null
     return { res, payload }
