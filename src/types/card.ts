@@ -15,6 +15,12 @@ export type Card = {
   purchase_price: number | null
   purchase_date: string | null
   current_value: number | null
+  value_low: number | null
+  value_high: number | null
+  confidence: string | null
+  trend: string | null
+  value_note: string | null
+  pricing_source: string | null
   last_updated: string | null
   created_at: string
 }

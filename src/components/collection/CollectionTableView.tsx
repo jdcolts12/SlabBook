@@ -2,6 +2,7 @@ import type { Card } from '../../types/card'
 import { cardGainDollars, cardGainPercent, formatGradeLine } from '../../lib/cardMetrics'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { pctFormatter } from '../../lib/formatters'
+import { CardValueDisplay } from './CardValueDisplay'
 
 type Props = {
   cards: Card[]
@@ -15,6 +16,27 @@ type Props = {
 function GainCell ({ c, money }: { c: Card; money: Intl.NumberFormat }) {
   const d = cardGainDollars(c)
   const p = cardGainPercent(c)
+  const paid = c.purchase_price != null ? Number(c.purchase_price) : null
+  const est = c.current_value != null ? Number(c.current_value) : null
+
+  if (paid != null && est != null && d != null) {
+    const pos = d >= 0
+    return (
+      <div className="text-right text-[11px] leading-snug">
+        <div className="text-zinc-500">
+          Paid {money.format(paid)} → Est. {money.format(est)}
+        </div>
+        <div className={[pos ? 'text-slab-teal' : 'text-red-400', 'mt-0.5 tabular-nums font-medium'].join(' ')}>
+          → {d >= 0 ? '+' : ''}
+          {money.format(d)}
+          {p != null && (
+            <span className="ml-1 font-normal text-zinc-500 tabular-nums">{pctFormatter.format(p / 100)}</span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (d == null && p == null) {
     return <span className="text-zinc-500">—</span>
   }
@@ -45,7 +67,7 @@ export function CollectionTableView ({
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[960px] text-left text-sm">
+        <table className="w-full min-w-[1080px] text-left text-sm">
           <thead>
             <tr className="border-b border-[var(--color-border-subtle)] text-xs uppercase tracking-wider text-zinc-500">
               <th className="px-3 py-3 font-medium lg:px-4">Player</th>
@@ -76,8 +98,8 @@ export function CollectionTableView ({
                 <td className="px-3 py-3 text-right tabular-nums text-zinc-300 lg:px-4">
                   {c.purchase_price != null ? money.format(Number(c.purchase_price)) : '—'}
                 </td>
-                <td className="px-3 py-3 text-right tabular-nums text-slab-teal-light/90 lg:px-4">
-                  {c.current_value != null ? money.format(Number(c.current_value)) : '—'}
+                <td className="min-w-[200px] px-3 py-3 text-right lg:px-4">
+                  <CardValueDisplay card={c} money={money} align="right" compactDisclaimer />
                 </td>
                 <td className="px-3 py-3 lg:px-4">
                   <GainCell c={c} money={money} />
@@ -91,8 +113,8 @@ export function CollectionTableView ({
                     onClick={() => void onRefresh(c)}
                     disabled={Boolean(refreshingIds[c.id])}
                     className="mr-1 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
-                    title="Refresh market value"
-                    aria-label="Refresh card value"
+                    title="Refresh AI estimate"
+                    aria-label="Refresh AI estimate"
                   >
                     {refreshingIds[c.id] ? '…' : '↻'}
                   </button>

@@ -17,6 +17,8 @@ export function cardGainPercent (c: Card): number | null {
 
 export type PortfolioMetrics = {
   totalValue: number
+  totalValueLow: number
+  totalValueHigh: number
   totalInvested: number
   gainLossDollars: number
   gainLossPercent: number | null
@@ -26,10 +28,17 @@ export type PortfolioMetrics = {
 
 export function computePortfolioMetrics (cards: Card[]): PortfolioMetrics {
   let totalValue = 0
+  let totalValueLow = 0
+  let totalValueHigh = 0
   let totalInvested = 0
 
   for (const c of cards) {
-    totalValue += Number(c.current_value ?? 0)
+    const mid = Number(c.current_value ?? 0)
+    const low = c.value_low != null ? Number(c.value_low) : mid
+    const high = c.value_high != null ? Number(c.value_high) : mid
+    totalValue += mid
+    totalValueLow += low
+    totalValueHigh += high
     totalInvested += Number(c.purchase_price ?? 0)
   }
 
@@ -46,6 +55,8 @@ export function computePortfolioMetrics (cards: Card[]): PortfolioMetrics {
 
   return {
     totalValue,
+    totalValueLow,
+    totalValueHigh,
     totalInvested,
     gainLossDollars,
     gainLossPercent,

@@ -18,19 +18,12 @@ import {
 import { moneyFormatter, pctFormatter } from '../lib/formatters'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
+import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
+import { getCardValue } from '../lib/pricing-service'
 import type { Card } from '../types/card'
 
 const money = moneyFormatter
-
-type CardValueResponse = {
-  average_sale_price: number
-  lowest_recent_sale: number
-  highest_recent_sale: number
-  last_sold_date: string | null
-  last_sold_price: number
-  ebay_search_url: string
-  updated_at: string
-}
 
 function parseOptionalNumber (raw: string): number | null {
   const t = raw.trim()
@@ -65,6 +58,12 @@ function formValuesToPayload (
     purchase_price: parseOptionalNumber(v.purchase_price),
     purchase_date: v.purchase_date.trim() || null,
     current_value: parseOptionalNumber(v.current_value),
+    value_low: null,
+    value_high: null,
+    confidence: null,
+    trend: null,
+    value_note: null,
+    pricing_source: null,
   }
 }
 
@@ -236,12 +235,21 @@ export function CollectionPage () {
     const payload = formValuesToPayload(user.id, values)
 
     if (dialogMode === 'add') {
-      const { error } = await supabase.from('cards').insert({
-        ...payload,
-        last_updated: new Date().toISOString(),
-      })
+      const { data: row, error } = await supabase
+        .from('cards')
+        .insert({
+          ...payload,
+          last_updated: new Date().toISOString(),
+        })
+        .select('*')
+        .single()
       if (error) throw new Error(error.message)
       setToastMessage('Card added to your collection.')
+      setDialogOpen(false)
+      setEditing(null)
+      await loadCards({ silent: true })
+      void estimateCard(row as Card, { forceRefresh: true })
+      return
     } else if (editing) {
       const { error } = await supabase
         .from('cards')
@@ -257,6 +265,34 @@ export function CollectionPage () {
     await loadCards({ silent: true })
   }
 
+  async function estimateCard (card: Card, opts?: { forceRefresh?: boolean }) {
+    setLoadError(null)
+    setRefreshingIds((prev) => ({ ...prev, [card.id]: true }))
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Missing auth session. Please sign in again.')
+      }
+      const est = await getCardValue(card, session.access_token, {
+        force_refresh: opts?.forceRefresh === true,
+      })
+      if (est.error) {
+        throw new Error(est.error)
+      }
+      setCards((prev) => prev.map((entry) => (entry.id === card.id ? mergeEstimateIntoCard(entry, est) : entry)))
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Unable to estimate value.')
+    } finally {
+      setRefreshingIds((prev) => {
+        const next = { ...prev }
+        delete next[card.id]
+        return next
+      })
+    }
+  }
+
   async function handleDelete (c: Card) {
     if (!user) return
     const ok = window.confirm(`Remove "${c.player_name}" from your collection?`)
@@ -270,64 +306,7 @@ export function CollectionPage () {
   }
 
   async function refreshSingleCardValue (card: Card) {
-    setLoadError(null)
-    setRefreshingIds((prev) => ({ ...prev, [card.id]: true }))
-
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (!session?.access_token) {
-        throw new Error('Missing auth session. Please sign in again.')
-      }
-
-      const response = await fetch('/api/fetch-card-value', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          card_id: card.id,
-          sport: card.sport,
-          player_name: card.player_name,
-          year: card.year,
-          set_name: card.set_name,
-          card_number: card.card_number,
-          variation: card.variation,
-          is_graded: card.is_graded,
-          grade: card.grade,
-          grading_company: card.grading_company,
-        }),
-      })
-
-      const payload = (await response.json().catch(() => null)) as
-        | (CardValueResponse & { error?: string })
-        | null
-      if (!response.ok) {
-        throw new Error(payload?.error ?? 'Unable to refresh value.')
-      }
-
-      setCards((prev) =>
-        prev.map((entry) =>
-          entry.id === card.id
-            ? {
-                ...entry,
-                current_value: payload?.average_sale_price ?? entry.current_value,
-                last_updated: payload?.updated_at ?? new Date().toISOString(),
-              }
-            : entry,
-        ),
-      )
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Unable to refresh value.')
-    } finally {
-      setRefreshingIds((prev) => {
-        const next = { ...prev }
-        delete next[card.id]
-        return next
-      })
-    }
+    await estimateCard(card, { forceRefresh: true })
   }
 
   const hasCards = cards.length > 0
@@ -400,6 +379,9 @@ export function CollectionPage () {
         </div>
       ) : (
         <>
+          <p className="rounded-lg border border-zinc-700/60 bg-zinc-900/40 px-4 py-2.5 text-xs leading-relaxed text-zinc-500">
+            {AI_VALUE_DISCLAIMER}
+          </p>
           <PortfolioSummaryBar
             metrics={portfolioMetrics}
             loading={false}

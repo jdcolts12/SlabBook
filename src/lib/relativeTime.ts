@@ -12,6 +12,11 @@ export function formatRelativeTime (value: string | null): string {
   return days === 1 ? '1 day ago' : `${days} days ago`
 }
 
+/** e.g. "Last updated: 5 hr ago" */
+export function formatLastUpdatedLine (value: string | null): string {
+  return `Last updated: ${formatRelativeTime(value)}`
+}
+
 /** For "Last analyzed: …" on AI insights */
 export function formatLastAnalyzed (iso: string): string {
   const timestamp = new Date(iso).getTime()

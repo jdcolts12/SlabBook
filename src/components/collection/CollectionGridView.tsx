@@ -1,7 +1,7 @@
 import type { Card } from '../../types/card'
 import { cardGainDollars, cardGainPercent, formatGradeLine } from '../../lib/cardMetrics'
-import { formatRelativeTime } from '../../lib/relativeTime'
 import { pctFormatter } from '../../lib/formatters'
+import { CardValueDisplay } from './CardValueDisplay'
 
 type Props = {
   cards: Card[]
@@ -26,6 +26,8 @@ export function CollectionGridView ({
         const d = cardGainDollars(c)
         const p = cardGainPercent(c)
         const gainPositive = d != null && d >= 0
+        const paid = c.purchase_price != null ? Number(c.purchase_price) : null
+        const est = c.current_value != null ? Number(c.current_value) : null
         return (
           <article
             key={c.id}
@@ -43,8 +45,8 @@ export function CollectionGridView ({
                 onClick={() => void onRefresh(c)}
                 disabled={Boolean(refreshingIds[c.id])}
                 className="shrink-0 rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-50"
-                title="Refresh value"
-                aria-label="Refresh card value"
+                title="Refresh AI estimate"
+                aria-label="Refresh AI estimate"
               >
                 {refreshingIds[c.id] ? '…' : '↻'}
               </button>
@@ -61,16 +63,31 @@ export function CollectionGridView ({
                   {c.purchase_price != null ? money.format(Number(c.purchase_price)) : '—'}
                 </dd>
               </div>
-              <div>
-                <dt className="text-xs text-zinc-500">Value</dt>
-                <dd className="mt-0.5 tabular-nums text-slab-teal-light">
-                  {c.current_value != null ? money.format(Number(c.current_value)) : '—'}
+              <div className="col-span-2">
+                <dt className="text-xs text-zinc-500">Est. value</dt>
+                <dd className="mt-0.5">
+                  <CardValueDisplay card={c} money={money} align="left" />
                 </dd>
               </div>
               <div className="col-span-2">
                 <dt className="text-xs text-zinc-500">Gain / loss</dt>
                 <dd className="mt-0.5">
-                  {d == null && p == null ? (
+                  {paid != null && est != null && d != null ? (
+                    <div className="text-sm leading-snug">
+                      <p className="text-zinc-500">
+                        Paid {money.format(paid)} → Est. {money.format(est)}
+                      </p>
+                      <p className={gainPositive ? 'text-slab-teal' : 'text-red-400'}>
+                        → {d >= 0 ? '+' : ''}
+                        {money.format(d)}
+                        {p != null && (
+                          <span className="ml-1 text-xs text-zinc-500 tabular-nums">
+                            ({pctFormatter.format(p / 100)})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  ) : d == null && p == null ? (
                     <span className="text-zinc-500">—</span>
                   ) : (
                     <>
@@ -95,7 +112,6 @@ export function CollectionGridView ({
                 </dd>
               </div>
             </dl>
-            <p className="mt-3 text-xs text-zinc-600">Updated {formatRelativeTime(c.last_updated)}</p>
             <div className="mt-4 flex gap-2 border-t border-[var(--color-border-subtle)] pt-4">
               <button
                 type="button"

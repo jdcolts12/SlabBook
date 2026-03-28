@@ -34,7 +34,16 @@ export function PortfolioSummaryBar ({ metrics, loading, money, pct }: Props) {
   return (
     <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-3 sm:p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-3">
-        <Stat label="Collection value">
+        <Stat
+          label="Collection value"
+          sub={
+            loading ? undefined : (
+              <span className="tabular-nums">
+                Range {money.format(metrics.totalValueLow)} — {money.format(metrics.totalValueHigh)}
+              </span>
+            )
+          }
+        >
           {loading ? '—' : money.format(metrics.totalValue)}
         </Stat>
         <Stat label="Total invested">{loading ? '—' : money.format(metrics.totalInvested)}</Stat>
