@@ -1,20 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
-import { getCardValue, type CardEstimateInput } from './lib/pricing-service'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { CardEstimateInput } from './lib/pricing-service'
 
 const CACHE_MS = 48 * 60 * 60 * 1000
 
-type ApiRequest = {
-  method?: string
-  headers?: Record<string, string | undefined>
-  body?: unknown
+function headerString (v: string | string[] | undefined): string | undefined {
+  if (v == null) return undefined
+  return Array.isArray(v) ? v[0] : v
 }
 
-type ApiResponse = {
-  setHeader: (name: string, value: string) => void
-  status: (code: number) => { json: (body: unknown) => void }
-}
-
-function getBearerToken (authHeader?: string): string | null {
+function getBearerToken (authHeader: string | undefined): string | null {
   if (!authHeader) return null
   const [scheme, token] = authHeader.split(' ')
   if (scheme?.toLowerCase() !== 'bearer' || !token) return null
@@ -66,16 +61,15 @@ type CardRow = {
   pricing_source: string | null
 }
 
-function jsonError (res: ApiResponse, status: number, error: string) {
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  return res.status(status).json({ error })
+function jsonError (res: VercelResponse, status: number, error: string) {
+  res.status(status).json({ error })
 }
 
-export default async function handler (req: ApiRequest, res: ApiResponse) {
+export default async function handler (req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST')
-      return res.status(405).json({ error: 'Method not allowed' })
+      return jsonError(res, 405, 'Method not allowed')
     }
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
@@ -89,9 +83,9 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       return jsonError(res, 500, 'Missing ANTHROPIC_API_KEY.')
     }
 
-    const token = getBearerToken(req.headers?.authorization)
+    const token = getBearerToken(headerString(req.headers.authorization))
     if (!token) {
-      return res.status(401).json({ error: 'Missing bearer token.' })
+      return jsonError(res, 401, 'Missing bearer token.')
     }
 
     const admin = createClient(supabaseUrl, supabaseServiceRole, {
@@ -104,7 +98,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     } = await admin.auth.getUser(token)
 
     if (userError || !user) {
-      return res.status(401).json({ error: 'Invalid or expired auth token.' })
+      return jsonError(res, 401, 'Invalid or expired auth token.')
     }
 
     const json = getJson(req.body)
@@ -112,7 +106,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const forceRefresh = json.force_refresh === true
 
     if (!cardId) {
-      return res.status(400).json({ error: 'card_id is required.' })
+      return jsonError(res, 400, 'card_id is required.')
     }
 
     const { data: row, error: fetchErr } = await admin
@@ -123,7 +117,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       .maybeSingle()
 
     if (fetchErr || !row) {
-      return res.status(404).json({ error: 'Card not found.' })
+      return jsonError(res, 404, 'Card not found.')
     }
 
     const card = row as CardRow
@@ -167,6 +161,8 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       condition: card.condition,
     }
 
+    const { getCardValue } = await import('./lib/pricing-service')
+
     let result: Awaited<ReturnType<typeof getCardValue>>
     try {
       result = await getCardValue(estimateInput, anthropicApiKey)
@@ -208,7 +204,6 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     })
 
     if (histErr) {
-      // Card row is already updated; history is auxiliary — don't fail the estimate
       console.error('[estimate-card-value] price_history insert skipped:', histErr.message)
     }
 
@@ -227,6 +222,10 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Estimate failed.'
     console.error('[estimate-card-value] unhandled:', error)
-    return jsonError(res, 500, message)
+    try {
+      jsonError(res, 500, message)
+    } catch (sendErr) {
+      console.error('[estimate-card-value] failed to send JSON error:', sendErr)
+    }
   }
 }

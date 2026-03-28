@@ -6,10 +6,7 @@
       "maxDuration": 300
     }
   },
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/:path*" },
-    { "source": "/:path*", "destination": "/" }
-  ],
+  "rewrites": [{ "source": "/:path*", "destination": "/" }],
   "headers": [
     {
       "source": "/assets/(.*)",
