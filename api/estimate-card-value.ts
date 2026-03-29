@@ -1,8 +1,668 @@
 import { createClient } from '@supabase/supabase-js'
-import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getCardValue, type CardEstimateInput } from './pricing'
 
-export const config = { maxDuration: 300 }
+type ApiRequest = {
+  method?: string
+  headers: Record<string, string | string[] | undefined>
+  body?: unknown
+}
+
+type ApiResponse = {
+  setHeader: (name: string, value: string) => void
+  status: (code: number) => { json: (body: unknown) => void }
+  writableEnded?: boolean
+  headersSent?: boolean
+  statusCode?: number
+  end?: (chunk: string, encoding?: BufferEncoding, cb?: () => void) => void
+}
+
+type CardEstimateInput = {
+  player_name: string
+  year: number | null
+  set_name: string | null
+  card_number: string | null
+  variation: string | null
+  sport: string | null
+  is_graded: boolean
+  /** Numeric grade when parseable (e.g. 10 from "PSA 10"); optional hint for the model */
+  grade: number | null
+  /** Full slab label for the prompt (e.g. "PSA 10", "BGS 9.5", "SGC AUTH") */
+  grade_display: string | null
+  grading_company: string | null
+  condition: string | null
+}
+
+type CardEstimateResult = {
+  low: number
+  mid: number
+  high: number
+  confidence: 'high' | 'medium' | 'low'
+  reasoning: string
+  trend: 'rising' | 'stable' | 'declining'
+  data_source: string
+}
+
+const SYSTEM_PROMPT = `You are an expert sports card pricing analyst for NFL, NBA, and MLB cards. You use web search to find recent eBay sold and listing data when estimating values. Ground your low/mid/high range in what you find; if sold comps are sparse, say so in reasoning and use wider ranges with lower confidence. Never invent specific sold prices—only ranges informed by search results or clear market tiers.`
+
+/** Anthropic server tool — executed by Anthropic (see web search tool docs) */
+function getWebSearchTool (): Record<string, unknown> {
+  const tool: Record<string, unknown> = {
+    name: 'web_search',
+    /** Without max_uses the API may cap searches very low; comps need several queries. */
+    max_uses: 10,
+  }
+  const ver = process.env.PRICING_WEB_SEARCH_VERSION?.trim()
+  if (ver === '20260209') {
+    tool.type = 'web_search_20260209'
+    /** Use direct-only invocation so dynamic filtering (code execution) is not required. */
+    tool.allowed_callers = ['direct']
+  } else {
+    tool.type = 'web_search_20250305'
+  }
+  const domains = process.env.PRICING_WEB_SEARCH_ALLOWED_DOMAINS?.trim()
+  if (domains) {
+    tool.allowed_domains = domains.split(',').map((s) => s.trim()).filter(Boolean)
+  } else if (process.env.PRICING_WEB_SEARCH_EBAY_ONLY === '1') {
+    tool.allowed_domains = ['ebay.com']
+  }
+  return tool
+}
+
+/** Client-executed structured output tool */
+const SUBMIT_CARD_ESTIMATE_TOOL = {
+  name: 'submit_card_estimate',
+  description:
+    'Submit the final USD value range and metadata for the sports card. Call this exactly once after you have used web_search to check eBay sold/listing data.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      low: {
+        type: 'number',
+        description: 'Low end of fair market range in USD (not cents)',
+      },
+      mid: {
+        type: 'number',
+        description: 'Most likely current value in USD',
+      },
+      high: {
+        type: 'number',
+        description: 'High end of fair market range in USD',
+      },
+      confidence: {
+        type: 'string',
+        enum: ['high', 'medium', 'low'],
+        description: 'How confident you are in this estimate',
+      },
+      reasoning: {
+        type: 'string',
+        description: 'One concise sentence; mention if grounded in eBay sold search results',
+      },
+      trend: {
+        type: 'string',
+        enum: ['rising', 'stable', 'declining'],
+        description: 'Perceived near-term demand trend for this card',
+      },
+      data_source: {
+        type: 'string',
+        description: 'Always use the exact text: Claude AI estimate',
+      },
+    },
+    required: ['low', 'mid', 'high', 'confidence', 'reasoning', 'trend'],
+  },
+}
+
+function buildUserPrompt (card: CardEstimateInput): string {
+  const gradeLine = card.is_graded
+    ? card.grade_display?.trim() ||
+      (card.grade != null
+        ? `${card.grade}${card.grading_company ? ` (${card.grading_company})` : ''}`
+        : 'Graded (details incomplete)')
+    : 'N/A (raw)'
+
+  return `Estimate the current market value for this sports card:
+
+Player: ${card.player_name}
+Year: ${card.year ?? 'Unknown'}
+Set: ${card.set_name ?? 'Unknown'}
+Card Number: ${card.card_number ?? 'N/A'}
+Variation: ${card.variation ?? 'None'}
+Sport: ${card.sport ?? 'Unknown'}
+Graded: ${card.is_graded}
+Grade / slab: ${gradeLine}
+Condition if raw: ${card.condition ?? 'N/A'}
+
+Workflow (required):
+1. Use the web_search tool one or more times with queries aimed at eBay sold / completed listings for this player, year, set, and card (e.g. "eBay sold [player] [year] [set] [card #] graded PSA").
+2. After reviewing search results, call submit_card_estimate exactly once with low, mid, high in USD and honest confidence.
+
+If search finds no relevant sold data, still submit an estimate with wider range and lower confidence, and say so in reasoning.`
+}
+
+function extractJsonFromFencedOrSlice (raw: string): string {
+  const t = raw.trim()
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fence?.[1]) return fence[1].trim()
+  return t
+}
+
+/** First top-level {...} with balanced braces (reasoning text may contain { or }) */
+function extractBalancedJsonObject (s: string): string | null {
+  const start = s.indexOf('{')
+  if (start < 0) return null
+  let depth = 0
+  for (let i = start; i < s.length; i++) {
+    const c = s[i]
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return s.slice(start, i + 1)
+    }
+  }
+  return null
+}
+
+function unwrapEstimatePayload (raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const o = raw as Record<string, unknown>
+  const inner = o.estimate ?? o.values ?? o.card_estimate ?? o.pricing ?? o.result
+  if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+    return inner as Record<string, unknown>
+  }
+  return o
+}
+
+/** Accept plain numbers or strings like "$1,234" / "1234.50" */
+function parseEstimateNumber (value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[$,\s]/g, '').trim()
+    if (!cleaned) return null
+    const n = Number.parseFloat(cleaned)
+    if (Number.isFinite(n) && n >= 0) return n
+  }
+  return null
+}
+
+function normalizeConfidence (value: unknown): 'high' | 'medium' | 'low' {
+  const s = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (s === 'high' || s === 'very high') return 'high'
+  if (s === 'medium' || s === 'med' || s === 'moderate' || s === 'average') return 'medium'
+  if (s === 'low') return 'low'
+  return 'medium'
+}
+
+function normalizeTrend (value: unknown): 'rising' | 'stable' | 'declining' {
+  const s = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (
+    s === 'rising' ||
+    s === 'up' ||
+    s === 'increasing' ||
+    s === 'growing' ||
+    s === 'bullish'
+  ) {
+    return 'rising'
+  }
+  if (
+    s === 'declining' ||
+    s === 'down' ||
+    s === 'falling' ||
+    s === 'decreasing' ||
+    s === 'bearish'
+  ) {
+    return 'declining'
+  }
+  if (
+    s === 'stable' ||
+    s === 'flat' ||
+    s === 'sideways' ||
+    s === 'steady' ||
+    s === 'neutral' ||
+    s === 'unchanged'
+  ) {
+    return 'stable'
+  }
+  return 'stable'
+}
+
+function pickEstimateFields (parsed: Record<string, unknown>): {
+  low: number | null
+  mid: number | null
+  high: number | null
+} {
+  const low = parseEstimateNumber(
+    parsed.low ?? parsed.min ?? parsed.floor ?? parsed.low_usd ?? parsed.low_end,
+  )
+  const mid = parseEstimateNumber(
+    parsed.mid ??
+      parsed.medium ??
+      parsed.value ??
+      parsed.current_value ??
+      parsed.median ??
+      parsed.estimate ??
+      parsed.mid_usd ??
+      parsed.estimated_value,
+  )
+  const high = parseEstimateNumber(
+    parsed.high ?? parsed.max ?? parsed.ceiling ?? parsed.high_usd ?? parsed.high_end,
+  )
+  return { low, mid, high }
+}
+
+function normalizeEstimate (parsed: Record<string, unknown>): CardEstimateResult | null {
+  let { low, mid, high } = pickEstimateFields(parsed)
+  if (low == null || mid == null || high == null) return null
+
+  if (low > high) {
+    const t = low
+    low = high
+    high = t
+  }
+  mid = Math.min(high, Math.max(low, mid))
+
+  const reasoning =
+    typeof parsed.reasoning === 'string' && parsed.reasoning.trim()
+      ? parsed.reasoning.trim()
+      : 'Estimate from card details and typical market behavior for this type of card.'
+  const data_source =
+    typeof parsed.data_source === 'string' && parsed.data_source.trim()
+      ? parsed.data_source.trim()
+      : 'Claude AI estimate'
+
+  return {
+    low: Math.round(low * 100) / 100,
+    mid: Math.round(mid * 100) / 100,
+    high: Math.round(high * 100) / 100,
+    confidence: normalizeConfidence(parsed.confidence),
+    reasoning,
+    trend: normalizeTrend(parsed.trend),
+    data_source,
+  }
+}
+
+type AnthropicContentBlock = {
+  type?: string
+  text?: string
+  name?: string
+  input?: Record<string, unknown> | string
+}
+
+/** Anthropic sometimes delivers tool `input` as a JSON string */
+function coerceToolInput (input: unknown): Record<string, unknown> | null {
+  if (input != null && typeof input === 'object' && !Array.isArray(input)) {
+    return input as Record<string, unknown>
+  }
+  if (typeof input === 'string') {
+    try {
+      const p = JSON.parse(input) as unknown
+      if (p != null && typeof p === 'object' && !Array.isArray(p)) return p as Record<string, unknown>
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function recordFromToolUseBlocks (content: AnthropicContentBlock[] | undefined): Record<string, unknown> | null {
+  if (!content?.length) return null
+  for (const b of content) {
+    if (b?.type !== 'tool_use') continue
+    const rec = coerceToolInput(b.input)
+    if (!rec) continue
+    const { low, mid, high } = pickEstimateFields(rec)
+    if (low != null && mid != null && high != null) return rec
+    if (b.name === 'submit_card_estimate' && Object.keys(rec).length > 0) return rec
+  }
+  return null
+}
+
+function recordFromTextBlocks (content: AnthropicContentBlock[] | undefined): Record<string, unknown> | null {
+  const text =
+    content
+      ?.filter((item) => item?.type === 'text')
+      .map((item) => item?.text ?? '')
+      .join('\n')
+      .trim() ?? ''
+  if (!text) return null
+
+  const trimmed = extractJsonFromFencedOrSlice(text)
+  const balanced = extractBalancedJsonObject(trimmed) ?? extractBalancedJsonObject(text)
+  const attempts = [balanced, trimmed, text].filter(Boolean) as string[]
+
+  for (const chunk of attempts) {
+    try {
+      const raw = JSON.parse(chunk) as unknown
+      const unwrapped = unwrapEstimatePayload(raw)
+      if (unwrapped) return unwrapped
+    } catch {
+      /* try next */
+    }
+  }
+  return null
+}
+
+type AnthropicPayload = {
+  content?: AnthropicContentBlock[]
+  stop_reason?: string
+  error?: { message?: string }
+  message?: string
+  usage?: {
+    server_tool_use?: { web_search_requests?: number }
+  }
+}
+
+type MessageRow = { role: 'user' | 'assistant'; content: unknown }
+
+const PAUSE_TURN_MAX = 8
+
+type GetCardValueOptions = {
+  /** When aborted, in-flight Anthropic fetches stop (e.g. Vercel wall-clock budget). */
+  signal?: AbortSignal
+  /** When set, overrides PRICING_SKIP_WEB_SEARCH for this call only. */
+  skipWebSearch?: boolean
+}
+
+/**
+ * On Vercel, web search + tools often exceeds hobby function limits → platform 500 with a non-JSON
+ * body. Default to no web search unless the project explicitly opts in (or uses eBay/domain hints).
+ */
+function resolveSkipWebSearch (options?: GetCardValueOptions): boolean {
+  if (options?.skipWebSearch === true) return true
+  if (options?.skipWebSearch === false) return false
+  if (process.env.PRICING_SKIP_WEB_SEARCH === '1') return true
+  if (process.env.VERCEL !== '1') return false
+  const wantsWeb =
+    process.env.PRICING_ENABLE_WEB_SEARCH === '1' ||
+    process.env.PRICING_WEB_SEARCH_EBAY_ONLY === '1' ||
+    Boolean(process.env.PRICING_WEB_SEARCH_ALLOWED_DOMAINS?.trim())
+  return !wantsWeb
+}
+
+/** Parent wall + optional per-fetch cap; whichever fires first aborts the request. */
+function createAnthropicFetchAbort (
+  parentSignal: AbortSignal | undefined,
+  perFetchTimeoutMs: number,
+): { signal: AbortSignal | undefined; dispose: () => void } {
+  const hasTimeout = Number.isFinite(perFetchTimeoutMs) && perFetchTimeoutMs > 0
+  if (!parentSignal && !hasTimeout) {
+    return { signal: undefined, dispose: () => {} }
+  }
+  if (parentSignal && !hasTimeout) {
+    return { signal: parentSignal, dispose: () => {} }
+  }
+  if (!parentSignal && hasTimeout) {
+    const combined = new AbortController()
+    const t = setTimeout(() => combined.abort(), perFetchTimeoutMs)
+    return {
+      signal: combined.signal,
+      dispose: () => clearTimeout(t),
+    }
+  }
+  const combined = new AbortController()
+  const cleanups: (() => void)[] = []
+  const parent = parentSignal!
+  if (parent.aborted) combined.abort()
+  else {
+    const onParentAbort = () => combined.abort()
+    parent.addEventListener('abort', onParentAbort, { once: true })
+    cleanups.push(() => parent.removeEventListener('abort', onParentAbort))
+  }
+  const t = setTimeout(() => combined.abort(), perFetchTimeoutMs)
+  cleanups.push(() => clearTimeout(t))
+  return {
+    signal: combined.signal,
+    dispose: () => {
+      cleanups.forEach((fn) => fn())
+    },
+  }
+}
+
+async function getCardValue (
+  card: CardEstimateInput,
+  anthropicApiKey: string,
+  options?: GetCardValueOptions,
+): Promise<{ ok: true; estimate: CardEstimateResult } | { ok: false; error: string }> {
+  try {
+    return await getCardValueInner(card, anthropicApiKey, options)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unexpected pricing error.'
+    console.error('[pricing-service] getCardValue:', e)
+    return { ok: false, error: msg }
+  }
+}
+
+async function getCardValueInner (
+  card: CardEstimateInput,
+  anthropicApiKey: string,
+  options?: GetCardValueOptions,
+): Promise<{ ok: true; estimate: CardEstimateResult } | { ok: false; error: string }> {
+  const userPrompt = buildUserPrompt(card)
+  const requestSignal = options?.signal
+
+  const model =
+    typeof process.env.ANTHROPIC_MODEL === 'string' && process.env.ANTHROPIC_MODEL.trim()
+      ? process.env.ANTHROPIC_MODEL.trim()
+      : 'claude-sonnet-4-20250514'
+
+  const skipWebSearch = resolveSkipWebSearch(options)
+  const useSubmitTool = process.env.PRICING_SKIP_TOOL_USE !== '1'
+
+  const toolsWithWeb = [getWebSearchTool(), SUBMIT_CARD_ESTIMATE_TOOL]
+  const toolsSubmitOnly = [SUBMIT_CARD_ESTIMATE_TOOL]
+
+  const bodyTextOnly = {
+    model,
+    max_tokens: 8192,
+    temperature: 0.2,
+    system: `${SYSTEM_PROMPT} Return ONLY one JSON object, no markdown, with keys low, mid, high (numbers), confidence, reasoning, trend, data_source.`,
+    messages: [{ role: 'user', content: `${userPrompt}\n\nReturn only valid JSON.` }],
+  }
+
+  async function callAnthropic (body: object): Promise<{ res: Response; payload: AnthropicPayload | null }> {
+    let serialized: string
+    try {
+      serialized = JSON.stringify(body)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'serialize failed'
+      console.error('[pricing-service] JSON.stringify(messages) failed:', msg)
+      return {
+        res: new Response(JSON.stringify({ error: { message: msg } }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        }),
+        payload: { error: { message: `Request serialization failed: ${msg}` } },
+      }
+    }
+
+    const headers: Record<string, string> = {
+      'x-api-key': anthropicApiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    }
+    const beta = process.env.ANTHROPIC_BETA?.trim()
+    if (beta) headers['anthropic-beta'] = beta
+
+    const timeoutRaw = process.env.PRICING_ANTHROPIC_TIMEOUT_MS?.trim()
+    const perFetchTimeoutMs = timeoutRaw ? Number.parseInt(timeoutRaw, 10) : 0
+    const { signal: fetchSignal, dispose } = createAnthropicFetchAbort(
+      requestSignal,
+      perFetchTimeoutMs,
+    )
+
+    const init: RequestInit = { method: 'POST', headers, body: serialized }
+    if (fetchSignal) init.signal = fetchSignal
+
+    let res: Response
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', init)
+    } catch (e) {
+      dispose()
+      const aborted = e instanceof Error && e.name === 'AbortError'
+      if (aborted) {
+        const wall = requestSignal?.aborted === true
+        const msg = wall
+          ? 'Estimate aborted (function time budget). Retrying without web search, or set ESTIMATE_MAX_MS=0 / upgrade Vercel limits / enable Fluid Compute.'
+          : `Anthropic fetch aborted (timeout or signal). PRICING_ANTHROPIC_TIMEOUT_MS=${perFetchTimeoutMs || 'off'}.`
+        return {
+          res: new Response(null, { status: 504 }),
+          payload: { error: { message: msg } },
+        }
+      }
+      throw e
+    }
+    dispose()
+    const payload = (await res.json().catch(() => null)) as AnthropicPayload | null
+    return { res, payload }
+  }
+
+  async function runWithPauseTurn (base: {
+    model: string
+    max_tokens: number
+    temperature: number
+    system: string
+    tools: object[]
+    tool_choice?: object
+    messages: MessageRow[]
+  }): Promise<{ res: Response; payload: AnthropicPayload | null }> {
+    const messages: MessageRow[] = [...base.messages]
+    let lastOut: { res: Response; payload: AnthropicPayload | null } | undefined
+
+    for (let i = 0; i < PAUSE_TURN_MAX; i++) {
+      const body: Record<string, unknown> = {
+        model: base.model,
+        max_tokens: base.max_tokens,
+        temperature: base.temperature,
+        system: base.system,
+        tools: base.tools,
+        messages,
+      }
+      if (base.tool_choice) body.tool_choice = base.tool_choice
+
+      const out = await callAnthropic(body)
+      lastOut = out
+      if (!out.res.ok) return out
+
+      const stop = out.payload?.stop_reason
+      if (stop !== 'pause_turn' || !out.payload?.content) {
+        return out
+      }
+
+      messages.push({ role: 'assistant', content: out.payload.content })
+    }
+
+    return (
+      lastOut ?? {
+        res: new Response(null, { status: 500 }),
+        payload: { error: { message: 'Web search turn limit exceeded (pause_turn).' } },
+      }
+    )
+  }
+
+  let anthropicResponse: Response
+  let payload: AnthropicPayload | null
+  /** True when the successful HTTP response came from a request that included the web_search tool (not the submit-only fallback). */
+  let completedWithWebSearchTools = false
+
+  if (useSubmitTool && !skipWebSearch) {
+    const first = await runWithPauseTurn({
+      model,
+      max_tokens: 8192,
+      temperature: 0.2,
+      system: SYSTEM_PROMPT,
+      tools: toolsWithWeb,
+      messages: [{ role: 'user', content: userPrompt }],
+    })
+    anthropicResponse = first.res
+    payload = first.payload
+
+    const errMsg = payload?.error?.message ?? ''
+    const tookSubmitOnlyFallback =
+      !anthropicResponse.ok &&
+      (anthropicResponse.status === 400 || anthropicResponse.status === 404) &&
+      (/web_search|tool|schema|model|not_found/i.test(errMsg) || anthropicResponse.status === 404)
+
+    if (tookSubmitOnlyFallback) {
+      console.warn(
+        '[pricing-service] Web search tool rejected by Claude API; retrying without live search. Error:',
+        errMsg || anthropicResponse.status,
+      )
+      const second = await runWithPauseTurn({
+        model,
+        max_tokens: 8192,
+        temperature: 0.2,
+        system: SYSTEM_PROMPT,
+        tools: toolsSubmitOnly,
+        tool_choice: { type: 'tool', name: 'submit_card_estimate' },
+        messages: [{ role: 'user', content: userPrompt }],
+      })
+      anthropicResponse = second.res
+      payload = second.payload
+    } else if (anthropicResponse.ok) {
+      completedWithWebSearchTools = true
+    }
+  } else if (useSubmitTool && skipWebSearch) {
+    const r = await runWithPauseTurn({
+      model,
+      max_tokens: 4096,
+      temperature: 0.2,
+      system: SYSTEM_PROMPT,
+      tools: toolsSubmitOnly,
+      tool_choice: { type: 'tool', name: 'submit_card_estimate' },
+      messages: [{ role: 'user', content: userPrompt }],
+    })
+    anthropicResponse = r.res
+    payload = r.payload
+  } else {
+    const r = await callAnthropic(bodyTextOnly)
+    anthropicResponse = r.res
+    payload = r.payload
+  }
+
+  if (!anthropicResponse.ok) {
+    const msg = payload?.error?.message || payload?.message || 'Claude API request failed.'
+    return { ok: false, error: `[${anthropicResponse.status}] ${msg}` }
+  }
+
+  if (completedWithWebSearchTools) {
+    const n = payload?.usage?.server_tool_use?.web_search_requests
+    if (typeof n === 'number' && n === 0) {
+      console.warn(
+        '[pricing-service] Response had 0 web_search_requests. Use a model that supports web search (e.g. claude-sonnet-4-20250514+), ensure Web search is enabled in the Anthropic Console (org settings), and avoid PRICING_SKIP_WEB_SEARCH=1 on the server.',
+      )
+    }
+  }
+
+  let record =
+    recordFromToolUseBlocks(payload?.content) ?? recordFromTextBlocks(payload?.content)
+
+  if (!record && useSubmitTool && !skipWebSearch) {
+    const fallback = await callAnthropic(bodyTextOnly)
+    if (fallback.res.ok) {
+      record =
+        recordFromToolUseBlocks(fallback.payload?.content) ??
+        recordFromTextBlocks(fallback.payload?.content)
+    }
+  }
+
+  if (!record) {
+    return {
+      ok: false,
+      error: useSubmitTool
+        ? 'Could not read an estimate from Claude (no submit_card_estimate tool result and no parseable JSON). Enable web search in the Anthropic Console, set PRICING_SKIP_WEB_SEARCH=1 to disable search, or PRICING_SKIP_TOOL_USE=1 for JSON-only.'
+        : 'Could not read an estimate from Claude (response was not valid JSON).',
+    }
+  }
+
+  const estimate = normalizeEstimate(record)
+  if (!estimate) {
+    return {
+      ok: false,
+      error:
+        'Claude returned fields that could not be turned into low/mid/high dollar amounts. Check model output format.',
+    }
+  }
+
+  return { ok: true, estimate }
+}
+
 
 const CACHE_MS = 48 * 60 * 60 * 1000
 
@@ -29,8 +689,20 @@ function createEstimateWall (): { signal: AbortSignal; clear: () => void } | und
 }
 
 function shouldRetryEstimateWithoutWebSearch (error: string): boolean {
-  return /504|abort|deadline|timeout|exceeded|time budget|ECONNRESET|ETIMEDOUT|fetch failed/i.test(
-    error,
+  return (
+    /504|abort|deadline|timeout|exceeded|time budget|ECONNRESET|ETIMEDOUT|fetch failed/i.test(error) ||
+    /\[(?:50[0-9]|502|503|504|529)\]/.test(error) ||
+    /Could not read an estimate from Claude/i.test(error)
+  )
+}
+
+function firstEstimatePassUsesWebSearch (): boolean {
+  if (process.env.PRICING_SKIP_WEB_SEARCH === '1') return false
+  if (process.env.VERCEL !== '1') return true
+  return (
+    process.env.PRICING_ENABLE_WEB_SEARCH === '1' ||
+    process.env.PRICING_WEB_SEARCH_EBAY_ONLY === '1' ||
+    Boolean(process.env.PRICING_WEB_SEARCH_ALLOWED_DOMAINS?.trim())
   )
 }
 
@@ -92,19 +764,19 @@ type CardRow = {
 }
 
 /** Use Express-style .json() — matches other api/* routes and @vercel/node expectations. */
-function jsonError (res: VercelResponse, status: number, error: string) {
+function jsonError (res: ApiResponse, status: number, error: string) {
   const safe =
     error.length > 8000 ? `${error.slice(0, 8000)}…` : error.replace(/\u2028|\u2029/g, ' ')
   if (res.writableEnded || res.headersSent) return
   res.status(status).json({ error: safe })
 }
 
-function jsonOk (res: VercelResponse, status: number, body: Record<string, unknown>) {
+function jsonOk (res: ApiResponse, status: number, body: Record<string, unknown>) {
   if (res.writableEnded || res.headersSent) return
   res.status(status).json(body)
 }
 
-export default async function handler (req: VercelRequest, res: VercelResponse) {
+export default async function handler (req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST')
@@ -220,7 +892,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
 
       const canRetryFastPath =
         !noAutoRetry &&
-        process.env.PRICING_SKIP_WEB_SEARCH !== '1' &&
+        firstEstimatePassUsesWebSearch() &&
         !result.ok &&
         shouldRetryEstimateWithoutWebSearch(result.error)
 
