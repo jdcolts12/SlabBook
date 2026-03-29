@@ -117,12 +117,12 @@ const HOW_STEPS: { title: string; detail: string; icon: string }[] = [
 function LandingCollectionMockup () {
   return (
     <div className="relative rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 shadow-2xl shadow-black/50 sm:p-5">
-      <div className="mb-4 flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
-        <div>
+      <div className="mb-4 flex flex-col gap-2 border-b border-[var(--color-border-subtle)] pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-slab-teal-light">Your collection</p>
           <p className="text-[11px] text-[var(--slab-text-muted)]">Slabs with photos · live estimates</p>
         </div>
-        <div className="rounded-full bg-slab-teal/15 px-2.5 py-1 text-[10px] font-semibold tabular-nums text-slab-teal-light">
+        <div className="shrink-0 self-start rounded-full bg-slab-teal/15 px-2.5 py-1.5 text-[10px] font-semibold tabular-nums text-slab-teal-light sm:self-auto sm:py-1">
           +$1,248 <span className="font-normal opacity-80">est. week</span>
         </div>
       </div>
@@ -223,36 +223,36 @@ export function LandingPage () {
 
       <main>
         {/* Hero */}
-        <section className="relative px-6 pb-20 pt-10 sm:px-10 lg:pt-16">
-          <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2 lg:items-center lg:gap-16">
-            <div>
-              <h1 className="text-4xl font-semibold leading-tight tracking-tight text-[var(--slab-text)] sm:text-5xl">
+        <section className="relative px-4 pb-16 pt-8 sm:px-6 sm:pb-20 sm:pt-10 md:px-10 lg:pt-16">
+          <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-2 lg:items-center lg:gap-16">
+            <div className="min-w-0">
+              <h1 className="text-[1.65rem] font-semibold leading-[1.15] tracking-tight text-[var(--slab-text)] min-[400px]:text-3xl sm:text-4xl sm:leading-tight md:text-5xl">
                 Your Card Collection. Tracked. Valued. Intelligent.
               </h1>
-              <p className="mt-5 text-lg leading-relaxed text-[var(--slab-text-muted)]">
+              <p className="mt-4 text-base leading-relaxed text-[var(--slab-text-muted)] sm:mt-5 sm:text-lg">
                 Track your slabs with photos, a binder-style grid or sortable table, and AI that estimates value from
                 live eBay comps. Snap a card — optional auto-identify fills the details — then get portfolio insights
                 that help you buy and sell smarter.
               </p>
-              <div className="mt-8 flex flex-wrap gap-4">
+              <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap">
                 {user ? (
                   <>
                     <Link
                       to="/dashboard"
-                      className="inline-flex items-center justify-center rounded-xl bg-slab-teal px-8 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light"
+                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-slab-teal px-6 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light sm:w-auto sm:min-w-[11rem] sm:px-8"
                     >
                       Open dashboard
                     </Link>
                     <Link
                       to="/dashboard/collection"
-                      className="inline-flex items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-8 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40"
+                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40 sm:w-auto sm:min-w-[11rem] sm:px-8"
                     >
                       My collection
                     </Link>
                     <button
                       type="button"
                       onClick={scrollToHow}
-                      className="inline-flex items-center justify-center rounded-xl border border-transparent px-2 py-3.5 text-base font-medium text-[var(--slab-text-muted)] underline-offset-4 transition hover:text-[var(--slab-text)] hover:underline sm:px-4"
+                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-transparent px-4 py-3 text-base font-medium text-[var(--slab-text-muted)] underline-offset-4 transition hover:text-[var(--slab-text)] hover:underline sm:w-auto sm:min-h-0 sm:px-4"
                     >
                       How it works
                     </button>
@@ -261,14 +261,14 @@ export function LandingPage () {
                   <>
                     <Link
                       to="/signup"
-                      className="inline-flex items-center justify-center rounded-xl bg-slab-teal px-8 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light"
+                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-slab-teal px-6 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light sm:w-auto sm:min-w-[12rem] sm:px-8"
                     >
                       Start Free
                     </Link>
                     <button
                       type="button"
                       onClick={scrollToHow}
-                      className="inline-flex items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-8 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40"
+                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40 sm:w-auto sm:min-w-[12rem] sm:px-8"
                     >
                       See How It Works
                     </button>
@@ -281,25 +281,30 @@ export function LandingPage () {
         </section>
 
         {/* Social proof */}
-        <section className="border-y border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/50 px-6 py-8 sm:px-10">
-          <p className="text-center text-sm font-medium text-[var(--slab-text-muted)]">
+        <section className="border-y border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/50 px-4 py-8 sm:px-6 md:px-10">
+          <p className="mx-auto max-w-md text-center text-sm font-medium leading-snug text-[var(--slab-text-muted)] sm:max-w-none">
             NFL · NBA · MLB · NHL — photos, binder grid, and AI in one place
           </p>
-          <div className="mx-auto mt-6 flex max-w-4xl flex-wrap justify-center gap-x-6 gap-y-3 text-center text-sm text-[var(--slab-text)] sm:gap-x-8">
-            <span>Card photos</span>
-            <span className="hidden text-[var(--slab-border)] sm:inline">|</span>
-            <span>Auto-identify</span>
-            <span className="hidden text-[var(--slab-border)] sm:inline">|</span>
-            <span>Live eBay comps</span>
-            <span className="hidden text-[var(--slab-border)] sm:inline">|</span>
-            <span>AI insights</span>
+          <div className="mx-auto mt-5 grid max-w-lg grid-cols-2 gap-2 text-center text-sm text-[var(--slab-text)] sm:mt-6 sm:flex sm:max-w-4xl sm:flex-wrap sm:justify-center sm:gap-x-6 sm:gap-y-2">
+            <span className="rounded-lg bg-[var(--color-surface)]/80 px-3 py-2.5 ring-1 ring-[var(--color-border-subtle)] sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0">
+              Card photos
+            </span>
+            <span className="rounded-lg bg-[var(--color-surface)]/80 px-3 py-2.5 ring-1 ring-[var(--color-border-subtle)] sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0">
+              Auto-identify
+            </span>
+            <span className="rounded-lg bg-[var(--color-surface)]/80 px-3 py-2.5 ring-1 ring-[var(--color-border-subtle)] sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0">
+              Live eBay comps
+            </span>
+            <span className="rounded-lg bg-[var(--color-surface)]/80 px-3 py-2.5 ring-1 ring-[var(--color-border-subtle)] sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0">
+              AI insights
+            </span>
           </div>
         </section>
 
         {/* Features */}
-        <section id="features" className="scroll-mt-24 px-6 py-20 sm:px-10">
-          <h2 className="text-center text-3xl font-semibold tracking-tight text-[var(--slab-text)]">Features</h2>
-          <div className="mx-auto mt-12 grid max-w-6xl gap-8 md:grid-cols-3">
+        <section id="features" className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 md:px-10">
+          <h2 className="text-center text-2xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-3xl">Features</h2>
+          <div className="mx-auto mt-10 grid max-w-6xl gap-6 sm:mt-12 sm:gap-8 md:grid-cols-3">
             {[
               {
                 icon: '📊',
@@ -319,7 +324,7 @@ export function LandingPage () {
             ].map((f) => (
               <div
                 key={f.title}
-                className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-6"
+                className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-5 sm:p-6"
               >
                 <span className="text-2xl" aria-hidden>
                   {f.icon}
@@ -335,10 +340,10 @@ export function LandingPage () {
         <section
           id="how"
           ref={howRef}
-          className="scroll-mt-24 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/35 px-6 py-20 sm:px-10"
+          className="scroll-mt-24 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/35 px-4 py-16 sm:px-6 sm:py-20 md:px-10"
         >
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-4xl">
+            <h2 className="text-2xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-3xl md:text-4xl">
               How SlabBook works
             </h2>
             <p className="mt-3 text-base leading-relaxed text-[var(--slab-text-muted)] sm:text-lg">
@@ -346,15 +351,35 @@ export function LandingPage () {
             </p>
           </div>
 
-          <div className="relative mx-auto mt-14 max-w-3xl">
+          <div className="relative mx-auto mt-10 max-w-3xl sm:mt-14">
             <div
-              className="pointer-events-none absolute left-[22px] top-10 bottom-10 w-px bg-gradient-to-b from-slab-teal/45 via-slab-teal/20 to-slab-teal/5 sm:left-[26px]"
+              className="pointer-events-none absolute left-[22px] top-10 hidden bottom-10 w-px bg-gradient-to-b from-slab-teal/45 via-slab-teal/20 to-slab-teal/5 sm:left-[26px] sm:block"
               aria-hidden
             />
-            <ol className="relative list-none pl-0">
+            <ol className="relative list-none space-y-4 pl-0 sm:space-y-0">
               {HOW_STEPS.map((step, i) => (
-                <li key={step.title} className="relative flex gap-5 pb-12 last:pb-0 sm:gap-8">
-                  <div className="relative z-[1] flex w-11 shrink-0 justify-center sm:w-[52px]">
+                <li key={step.title} className="relative pb-0 last:pb-0 sm:flex sm:gap-8 sm:pb-12">
+                  {/* Narrow screens: full-width cards */}
+                  <div className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface)]/90 p-4 shadow-sm sm:hidden">
+                    <div className="flex items-start gap-3">
+                      <span
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slab-teal/30 bg-[var(--color-surface-raised)] text-xl shadow-sm"
+                        aria-hidden
+                      >
+                        {step.icon}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-slab-teal-light">
+                          Step {i + 1}
+                        </p>
+                        <h3 className="mt-0.5 text-lg font-semibold text-[var(--slab-text)]">{step.title}</h3>
+                        <p className="mt-2 text-sm leading-relaxed text-[var(--slab-text-muted)]">{step.detail}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* sm+: timeline row */}
+                  <div className="relative z-[1] hidden w-11 shrink-0 justify-center sm:flex sm:w-[52px]">
                     <span
                       className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slab-teal/30 bg-[var(--color-surface)] text-lg shadow-md shadow-black/25 ring-2 ring-[var(--color-surface)] sm:h-[52px] sm:w-[52px] sm:text-xl"
                       aria-hidden
@@ -362,7 +387,7 @@ export function LandingPage () {
                       {step.icon}
                     </span>
                   </div>
-                  <div className="min-w-0 flex-1 pt-0.5">
+                  <div className="hidden min-w-0 flex-1 pt-0.5 sm:block">
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                       <span className="rounded-md bg-slab-teal/15 px-2 py-0.5 text-[11px] font-bold tabular-nums uppercase tracking-wide text-slab-teal-light">
                         Step {i + 1}
@@ -388,8 +413,8 @@ export function LandingPage () {
         />
 
         {/* FAQ */}
-        <section id="faq" className="scroll-mt-24 border-t border-[var(--color-border-subtle)] px-6 py-20 sm:px-10">
-          <h2 className="text-center text-3xl font-semibold tracking-tight text-[var(--slab-text)]">FAQ</h2>
+        <section id="faq" className="scroll-mt-24 border-t border-[var(--color-border-subtle)] px-4 py-16 sm:px-6 sm:py-20 md:px-10">
+          <h2 className="text-center text-2xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-3xl">FAQ</h2>
           <div className="mx-auto mt-10 max-w-2xl space-y-6">
             {FAQ.map((item) => (
               <div key={item.q}>

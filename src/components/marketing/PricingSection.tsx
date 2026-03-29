@@ -137,7 +137,7 @@ export function PricingSection ({
   }, [promoCode, tierKey])
 
   return (
-    <section id="pricing" className="scroll-mt-24 px-6 py-20 sm:px-10">
+    <section id="pricing" className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 md:px-10">
       <div className="mx-auto max-w-6xl">
         <h2 className="text-center text-3xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-4xl">
           Simple pricing
@@ -160,7 +160,7 @@ export function PricingSection ({
               </div>
               <Link
                 to={buildCtaHref('investor', promoCode, ctaBasePath)}
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-300"
+                className="inline-flex min-h-[48px] w-full shrink-0 items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-300 sm:w-auto sm:min-h-0"
               >
                 Claim Lifetime Access
               </Link>
@@ -223,7 +223,7 @@ export function PricingSection ({
                 </ul>
                 <Link
                   to={buildCtaHref(t.id, promoCode, ctaBasePath)}
-                  className="mt-8 inline-flex items-center justify-center rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
+                  className="mt-8 inline-flex min-h-[48px] w-full items-center justify-center rounded-lg bg-slab-teal px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light sm:w-auto sm:min-h-0 sm:py-2.5"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {t.cta}
