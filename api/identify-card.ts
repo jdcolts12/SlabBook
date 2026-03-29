@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 type ApiRequest = {
   method?: string
   headers: Record<string, string | undefined>
-  body?: string
+  body?: unknown
 }
 
 type ApiResponse = {
@@ -81,6 +81,28 @@ function normalizeConfidence (v: unknown): 'high' | 'medium' | 'low' | undefined
   return v
 }
 
+/** Vercel may pass JSON as a string, Buffer, or pre-parsed object — match other api/*.ts handlers. */
+function getJson (body: unknown): Record<string, unknown> {
+  if (body == null || body === '') return {}
+  const isBufferBody = typeof Buffer !== 'undefined' && Buffer.isBuffer(body)
+  if (body && typeof body === 'object' && !isBufferBody) return body as Record<string, unknown>
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body) as Record<string, unknown>
+    } catch {
+      return {}
+    }
+  }
+  if (isBufferBody) {
+    try {
+      return JSON.parse(body.toString('utf8')) as Record<string, unknown>
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
 export default async function handler (req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
@@ -116,15 +138,9 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     return res.status(401).json({ error: 'Invalid or expired auth token.' })
   }
 
-  let body: { image_base64?: string; media_type?: string }
-  try {
-    body = req.body ? (JSON.parse(req.body) as typeof body) : {}
-  } catch {
-    return res.status(400).json({ error: 'Invalid JSON body.' })
-  }
-
-  const b64 = body.image_base64?.trim()
-  const mediaType = body.media_type?.trim()
+  const raw = getJson(req.body)
+  const b64 = typeof raw.image_base64 === 'string' ? raw.image_base64.trim() : ''
+  const mediaType = typeof raw.media_type === 'string' ? raw.media_type.trim() : ''
   if (!b64 || !mediaType) {
     return res.status(400).json({ error: 'image_base64 and media_type are required.' })
   }
