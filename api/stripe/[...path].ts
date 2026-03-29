@@ -3,7 +3,7 @@ import {
   handleStripeCheckout,
   handleStripeInvoices,
   handleStripePortal,
-} from '../lib/stripeJsonHandlers'
+} from '../../server/stripeJsonHandlers'
 
 /**
  * Single serverless function for /api/stripe/* JSON routes (Hobby plan function limit).

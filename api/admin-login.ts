@@ -1,4 +1,4 @@
-import { ADMIN_COOKIE, parseCookies, signAdminCookie, verifyAdminCookie } from './lib/adminAuth'
+import { ADMIN_COOKIE, parseCookies, signAdminCookie, verifyAdminCookie } from '../server/adminAuth'
 
 type ApiRequest = {
   method?: string

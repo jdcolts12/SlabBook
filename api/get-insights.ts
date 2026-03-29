@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { canUseFeature, fetchUserPlan } from './lib/userTier'
+import { canUseFeature, fetchUserPlan } from '../server/userTier'
 
 type ApiRequest = {
   method?: string

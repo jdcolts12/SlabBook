@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { ADMIN_COOKIE, parseCookies, verifyAdminCookie } from './lib/adminAuth'
+import { ADMIN_COOKIE, parseCookies, verifyAdminCookie } from '../server/adminAuth'
 
 type ApiRequest = {
   method?: string

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { handlePromoRedeem, handlePromoValidate } from '../lib/promoRouteHandlers'
+import { handlePromoRedeem, handlePromoValidate } from '../../server/promoRouteHandlers'
 
 /**
  * /api/promo/validate and /api/promo/redeem — single function for Hobby plan limit.

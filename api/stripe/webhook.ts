@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import getRawBody from 'raw-body'
 import Stripe from 'stripe'
-import { createSupabaseAdmin } from '../lib/supabaseAdmin'
-import { redeemPromoAfterCheckout } from '../lib/promoRedeemFromStripe'
-import { sendWelcomeEmail } from '../lib/sendWelcomeEmail'
+import { createSupabaseAdmin } from '../../server/supabaseAdmin'
+import { redeemPromoAfterCheckout } from '../../server/promoRedeemFromStripe'
+import { sendWelcomeEmail } from '../../server/sendWelcomeEmail'
 
 export const config = {
   api: {
