@@ -573,7 +573,7 @@ export function CollectionPage () {
             ? "You've reached the 500 card limit on the Collector plan. Upgrade to Investor for unlimited cards, daily AI insights, and tax export."
             : "You've reached the 15 card limit on the free plan. Upgrade to track up to 500 cards, get AI insights, and live price estimates."
         }
-        ctaLabel={effectiveTier(profile) === 'collector' ? 'Upgrade for $12/mo' : 'Upgrade for $5/mo'}
+        ctaLabel={effectiveTier(profile) === 'collector' ? 'Get Investor' : 'Get Collector'}
         ctaLoading={upgradeLoading}
         onCta={() => {
           if (!session?.access_token) return

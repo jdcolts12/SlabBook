@@ -14,7 +14,7 @@ export function UpgradeModal ({
   open,
   title = 'Upgrade to Collector',
   body,
-  ctaLabel = 'Upgrade for $5/mo',
+  ctaLabel = 'Get Collector',
   onCta,
   onClose,
   ctaLoading = false,

@@ -141,7 +141,7 @@ export function BillingSettingsPage () {
                 disabled={checkoutLoading}
                 className="inline-flex items-center justify-center rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
               >
-                {checkoutLoading ? 'Redirecting…' : 'Upgrade to Collector'}
+                {checkoutLoading ? 'Redirecting…' : 'Get Collector'}
               </button>
             )}
             {profile?.stripe_customer_id && !lifetime && (

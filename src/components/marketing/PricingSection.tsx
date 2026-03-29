@@ -57,7 +57,7 @@ const TIERS: {
       'Price alerts',
       'Weekly AI insights',
     ],
-    cta: 'Subscribe for $5/mo',
+    cta: 'Get Collector',
   },
   {
     id: 'investor',
@@ -71,7 +71,7 @@ const TIERS: {
       'Trade analyzer',
       'Tax export (cost basis report)',
     ],
-    cta: 'Subscribe for $12/mo',
+    cta: 'Get Investor',
   },
 ]
 
@@ -128,7 +128,7 @@ export function PricingSection ({
   promoCode,
   onPromoChange,
   showFoundingBanner = true,
-  checkoutLabel = 'Choose a plan and sign up to get started.',
+  checkoutLabel = 'Pick a plan above — you can apply a promo code before checkout.',
   ctaBasePath = '/signup',
   accessToken = null,
   currentEffectiveTier = null,

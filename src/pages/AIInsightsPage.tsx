@@ -199,8 +199,8 @@ export function AIInsightsPage () {
       <div className="mx-auto max-w-lg space-y-6 px-4 py-16 text-center">
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">AI Insights</h1>
         <p className="text-sm leading-relaxed text-zinc-400">
-          Weekly and daily AI portfolio analysis is included with Collector and Investor plans. Upgrade to get
-          personalized sell opportunities, risks, and actions based on your slabs.
+          Weekly and daily AI portfolio analysis is included with Collector and Investor plans. Get Collector to
+          unlock personalized sell opportunities, risks, and actions based on your slabs.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
@@ -228,7 +228,7 @@ export function AIInsightsPage () {
             }}
             className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-slab-teal px-5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
           >
-            {gateCheckout ? 'Redirecting…' : 'Upgrade for $5/mo'}
+            {gateCheckout ? 'Redirecting…' : 'Get Collector'}
           </button>
         </div>
       </div>

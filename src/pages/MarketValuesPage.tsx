@@ -469,7 +469,7 @@ export function MarketValuesPage () {
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Market Values</h1>
         <p className="text-sm leading-relaxed text-zinc-400">
           Live market value tracking and the Market Values dashboard are included with Collector and Investor plans.
-          Upgrade to see comps, trends, and bulk estimates across your collection.
+          Get Collector to see comps, trends, and bulk estimates across your collection.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
@@ -497,7 +497,7 @@ export function MarketValuesPage () {
             }}
             className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-slab-teal px-5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
           >
-            {gateCheckout ? 'Redirecting…' : 'Upgrade for $5/mo'}
+            {gateCheckout ? 'Redirecting…' : 'Get Collector'}
           </button>
         </div>
       </div>
