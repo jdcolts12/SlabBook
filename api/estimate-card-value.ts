@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getCardValue, type CardEstimateInput } from './lib/pricing-service'
+import { getCardValue, type CardEstimateInput } from './pricing'
 
 export const config = { maxDuration: 300 }
 
@@ -294,10 +294,20 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Estimate failed.'
     console.error('[estimate-card-value] unhandled:', error)
+    const safe = message.slice(0, 4000).replace(/\u2028|\u2029/g, ' ')
     try {
-      jsonError(res, 500, message)
+      if (!res.headersSent && !res.writableEnded) {
+        res.statusCode = 500
+        res.setHeader('Content-Type', 'application/json; charset=utf-8')
+        res.end(JSON.stringify({ error: safe }))
+      }
     } catch (sendErr) {
       console.error('[estimate-card-value] failed to send JSON error:', sendErr)
+      try {
+        jsonError(res, 500, safe)
+      } catch {
+        /* last resort */
+      }
     }
   }
 }

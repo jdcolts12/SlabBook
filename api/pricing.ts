@@ -348,6 +348,22 @@ export type GetCardValueOptions = {
   skipWebSearch?: boolean
 }
 
+/**
+ * On Vercel, web search + tools often exceeds hobby function limits → platform 500 with a non-JSON
+ * body. Default to no web search unless the project explicitly opts in (or uses eBay/domain hints).
+ */
+function resolveSkipWebSearch (options?: GetCardValueOptions): boolean {
+  if (options?.skipWebSearch === true) return true
+  if (options?.skipWebSearch === false) return false
+  if (process.env.PRICING_SKIP_WEB_SEARCH === '1') return true
+  if (process.env.VERCEL !== '1') return false
+  const wantsWeb =
+    process.env.PRICING_ENABLE_WEB_SEARCH === '1' ||
+    process.env.PRICING_WEB_SEARCH_EBAY_ONLY === '1' ||
+    Boolean(process.env.PRICING_WEB_SEARCH_ALLOWED_DOMAINS?.trim())
+  return !wantsWeb
+}
+
 /** Parent wall + optional per-fetch cap; whichever fires first aborts the request. */
 function createAnthropicFetchAbort (
   parentSignal: AbortSignal | undefined,
@@ -414,10 +430,7 @@ async function getCardValueInner (
       ? process.env.ANTHROPIC_MODEL.trim()
       : 'claude-sonnet-4-20250514'
 
-  const skipWebSearch =
-    options?.skipWebSearch !== undefined
-      ? options.skipWebSearch
-      : process.env.PRICING_SKIP_WEB_SEARCH === '1'
+  const skipWebSearch = resolveSkipWebSearch(options)
   const useSubmitTool = process.env.PRICING_SKIP_TOOL_USE !== '1'
 
   const toolsWithWeb = [getWebSearchTool(), SUBMIT_CARD_ESTIMATE_TOOL]
