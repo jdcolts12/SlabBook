@@ -32,10 +32,28 @@ export type CardEstimateResult = {
 const SYSTEM_PROMPT = `You are an expert sports card pricing analyst for NFL, NBA, and MLB cards. You use web search to find recent eBay sold and listing data when estimating values. Ground your low/mid/high range in what you find; if sold comps are sparse, say so in reasoning and use wider ranges with lower confidence. Never invent specific sold prices—only ranges informed by search results or clear market tiers.`
 
 /** Anthropic server tool — executed by Anthropic (see web search tool docs) */
-const WEB_SEARCH_TOOL = {
-  type: 'web_search_20250305',
-  name: 'web_search',
-} as const
+function getWebSearchTool (): Record<string, unknown> {
+  const tool: Record<string, unknown> = {
+    name: 'web_search',
+    /** Without max_uses the API may cap searches very low; comps need several queries. */
+    max_uses: 10,
+  }
+  const ver = process.env.PRICING_WEB_SEARCH_VERSION?.trim()
+  if (ver === '20260209') {
+    tool.type = 'web_search_20260209'
+    /** Use direct-only invocation so dynamic filtering (code execution) is not required. */
+    tool.allowed_callers = ['direct']
+  } else {
+    tool.type = 'web_search_20250305'
+  }
+  const domains = process.env.PRICING_WEB_SEARCH_ALLOWED_DOMAINS?.trim()
+  if (domains) {
+    tool.allowed_domains = domains.split(',').map((s) => s.trim()).filter(Boolean)
+  } else if (process.env.PRICING_WEB_SEARCH_EBAY_ONLY === '1') {
+    tool.allowed_domains = ['ebay.com']
+  }
+  return tool
+}
 
 /** Client-executed structured output tool */
 const SUBMIT_CARD_ESTIMATE_TOOL = {
@@ -314,6 +332,9 @@ type AnthropicPayload = {
   stop_reason?: string
   error?: { message?: string }
   message?: string
+  usage?: {
+    server_tool_use?: { web_search_requests?: number }
+  }
 }
 
 type MessageRow = { role: 'user' | 'assistant'; content: unknown }
@@ -347,7 +368,7 @@ async function getCardValueInner (
   const skipWebSearch = process.env.PRICING_SKIP_WEB_SEARCH === '1'
   const useSubmitTool = process.env.PRICING_SKIP_TOOL_USE !== '1'
 
-  const toolsWithWeb = [WEB_SEARCH_TOOL, SUBMIT_CARD_ESTIMATE_TOOL]
+  const toolsWithWeb = [getWebSearchTool(), SUBMIT_CARD_ESTIMATE_TOOL]
   const toolsSubmitOnly = [SUBMIT_CARD_ESTIMATE_TOOL]
 
   const bodyTextOnly = {
@@ -374,13 +395,17 @@ async function getCardValueInner (
       }
     }
 
+    const headers: Record<string, string> = {
+      'x-api-key': anthropicApiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    }
+    const beta = process.env.ANTHROPIC_BETA?.trim()
+    if (beta) headers['anthropic-beta'] = beta
+
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'x-api-key': anthropicApiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
+      headers,
       body: serialized,
     })
     const payload = (await res.json().catch(() => null)) as AnthropicPayload | null
@@ -432,6 +457,8 @@ async function getCardValueInner (
 
   let anthropicResponse: Response
   let payload: AnthropicPayload | null
+  /** True when the successful HTTP response came from a request that included the web_search tool (not the submit-only fallback). */
+  let completedWithWebSearchTools = false
 
   if (useSubmitTool && !skipWebSearch) {
     const first = await runWithPauseTurn({
@@ -446,11 +473,16 @@ async function getCardValueInner (
     payload = first.payload
 
     const errMsg = payload?.error?.message ?? ''
-    if (
+    const tookSubmitOnlyFallback =
       !anthropicResponse.ok &&
       (anthropicResponse.status === 400 || anthropicResponse.status === 404) &&
       (/web_search|tool|schema|model|not_found/i.test(errMsg) || anthropicResponse.status === 404)
-    ) {
+
+    if (tookSubmitOnlyFallback) {
+      console.warn(
+        '[pricing-service] Web search tool rejected by Claude API; retrying without live search. Error:',
+        errMsg || anthropicResponse.status,
+      )
       const second = await runWithPauseTurn({
         model,
         max_tokens: 8192,
@@ -462,6 +494,8 @@ async function getCardValueInner (
       })
       anthropicResponse = second.res
       payload = second.payload
+    } else if (anthropicResponse.ok) {
+      completedWithWebSearchTools = true
     }
   } else if (useSubmitTool && skipWebSearch) {
     const r = await runWithPauseTurn({
@@ -484,6 +518,15 @@ async function getCardValueInner (
   if (!anthropicResponse.ok) {
     const msg = payload?.error?.message || payload?.message || 'Claude API request failed.'
     return { ok: false, error: `[${anthropicResponse.status}] ${msg}` }
+  }
+
+  if (completedWithWebSearchTools) {
+    const n = payload?.usage?.server_tool_use?.web_search_requests
+    if (typeof n === 'number' && n === 0) {
+      console.warn(
+        '[pricing-service] Response had 0 web_search_requests. Use a model that supports web search (e.g. claude-sonnet-4-20250514+), ensure Web search is enabled in the Anthropic Console (org settings), and avoid PRICING_SKIP_WEB_SEARCH=1 on the server.',
+      )
+    }
   }
 
   let record =

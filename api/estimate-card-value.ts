@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import type { CardEstimateInput } from './lib/pricing-service'
+import { getCardValue, type CardEstimateInput } from './lib/pricing-service'
 
 const CACHE_MS = 48 * 60 * 60 * 1000
 
@@ -160,8 +160,6 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
       grading_company: card.grading_company,
       condition: card.condition,
     }
-
-    const { getCardValue } = await import('./lib/pricing-service')
 
     let result: Awaited<ReturnType<typeof getCardValue>>
     try {
