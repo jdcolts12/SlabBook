@@ -341,12 +341,59 @@ type MessageRow = { role: 'user' | 'assistant'; content: unknown }
 
 const PAUSE_TURN_MAX = 8
 
+export type GetCardValueOptions = {
+  /** When aborted, in-flight Anthropic fetches stop (e.g. Vercel wall-clock budget). */
+  signal?: AbortSignal
+  /** When set, overrides PRICING_SKIP_WEB_SEARCH for this call only. */
+  skipWebSearch?: boolean
+}
+
+/** Parent wall + optional per-fetch cap; whichever fires first aborts the request. */
+function createAnthropicFetchAbort (
+  parentSignal: AbortSignal | undefined,
+  perFetchTimeoutMs: number,
+): { signal: AbortSignal | undefined; dispose: () => void } {
+  const hasTimeout = Number.isFinite(perFetchTimeoutMs) && perFetchTimeoutMs > 0
+  if (!parentSignal && !hasTimeout) {
+    return { signal: undefined, dispose: () => {} }
+  }
+  if (parentSignal && !hasTimeout) {
+    return { signal: parentSignal, dispose: () => {} }
+  }
+  if (!parentSignal && hasTimeout) {
+    const combined = new AbortController()
+    const t = setTimeout(() => combined.abort(), perFetchTimeoutMs)
+    return {
+      signal: combined.signal,
+      dispose: () => clearTimeout(t),
+    }
+  }
+  const combined = new AbortController()
+  const cleanups: (() => void)[] = []
+  const parent = parentSignal!
+  if (parent.aborted) combined.abort()
+  else {
+    const onParentAbort = () => combined.abort()
+    parent.addEventListener('abort', onParentAbort, { once: true })
+    cleanups.push(() => parent.removeEventListener('abort', onParentAbort))
+  }
+  const t = setTimeout(() => combined.abort(), perFetchTimeoutMs)
+  cleanups.push(() => clearTimeout(t))
+  return {
+    signal: combined.signal,
+    dispose: () => {
+      cleanups.forEach((fn) => fn())
+    },
+  }
+}
+
 export async function getCardValue (
   card: CardEstimateInput,
   anthropicApiKey: string,
+  options?: GetCardValueOptions,
 ): Promise<{ ok: true; estimate: CardEstimateResult } | { ok: false; error: string }> {
   try {
-    return await getCardValueInner(card, anthropicApiKey)
+    return await getCardValueInner(card, anthropicApiKey, options)
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Unexpected pricing error.'
     console.error('[pricing-service] getCardValue:', e)
@@ -357,15 +404,20 @@ export async function getCardValue (
 async function getCardValueInner (
   card: CardEstimateInput,
   anthropicApiKey: string,
+  options?: GetCardValueOptions,
 ): Promise<{ ok: true; estimate: CardEstimateResult } | { ok: false; error: string }> {
   const userPrompt = buildUserPrompt(card)
+  const requestSignal = options?.signal
 
   const model =
     typeof process.env.ANTHROPIC_MODEL === 'string' && process.env.ANTHROPIC_MODEL.trim()
       ? process.env.ANTHROPIC_MODEL.trim()
       : 'claude-sonnet-4-20250514'
 
-  const skipWebSearch = process.env.PRICING_SKIP_WEB_SEARCH === '1'
+  const skipWebSearch =
+    options?.skipWebSearch !== undefined
+      ? options.skipWebSearch
+      : process.env.PRICING_SKIP_WEB_SEARCH === '1'
   const useSubmitTool = process.env.PRICING_SKIP_TOOL_USE !== '1'
 
   const toolsWithWeb = [getWebSearchTool(), SUBMIT_CARD_ESTIMATE_TOOL]
@@ -404,35 +456,34 @@ async function getCardValueInner (
     if (beta) headers['anthropic-beta'] = beta
 
     const timeoutRaw = process.env.PRICING_ANTHROPIC_TIMEOUT_MS?.trim()
-    const timeoutMs = timeoutRaw ? Number.parseInt(timeoutRaw, 10) : 0
+    const perFetchTimeoutMs = timeoutRaw ? Number.parseInt(timeoutRaw, 10) : 0
+    const { signal: fetchSignal, dispose } = createAnthropicFetchAbort(
+      requestSignal,
+      perFetchTimeoutMs,
+    )
+
     const init: RequestInit = { method: 'POST', headers, body: serialized }
-    let clearTimer: (() => void) | undefined
-    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
-      const ac = new AbortController()
-      const t = setTimeout(() => ac.abort(), timeoutMs)
-      clearTimer = () => clearTimeout(t)
-      init.signal = ac.signal
-    }
+    if (fetchSignal) init.signal = fetchSignal
 
     let res: Response
     try {
       res = await fetch('https://api.anthropic.com/v1/messages', init)
     } catch (e) {
-      clearTimer?.()
+      dispose()
       const aborted = e instanceof Error && e.name === 'AbortError'
       if (aborted) {
+        const wall = requestSignal?.aborted === true
+        const msg = wall
+          ? 'Estimate aborted (function time budget). Retrying without web search, or set ESTIMATE_MAX_MS=0 / upgrade Vercel limits / enable Fluid Compute.'
+          : `Anthropic fetch aborted (timeout or signal). PRICING_ANTHROPIC_TIMEOUT_MS=${perFetchTimeoutMs || 'off'}.`
         return {
           res: new Response(null, { status: 504 }),
-          payload: {
-            error: {
-              message: `Anthropic request exceeded PRICING_ANTHROPIC_TIMEOUT_MS (${timeoutMs}ms). Increase Vercel function max duration / enable Fluid Compute, raise the timeout, set PRICING_SKIP_WEB_SEARCH=1, or upgrade your plan.`,
-            },
-          },
+          payload: { error: { message: msg } },
         }
       }
       throw e
     }
-    clearTimer?.()
+    dispose()
     const payload = (await res.json().catch(() => null)) as AnthropicPayload | null
     return { res, payload }
   }

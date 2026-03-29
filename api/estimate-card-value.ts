@@ -2,12 +2,37 @@ import { createClient } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getCardValue, type CardEstimateInput } from './lib/pricing-service'
 
-/** Ensures Vercel applies long duration to this route (also set in vercel.json). */
-export const config = {
-  maxDuration: 300,
-}
+export const config = { maxDuration: 300 }
 
 const CACHE_MS = 48 * 60 * 60 * 1000
+
+/**
+ * Hard cap for the whole estimate (all Anthropic round-trips). On Vercel, defaults to 52s so we
+ * finish with JSON before the ~60s hobby wall kills the invocation with a non-JSON 500.
+ * Set ESTIMATE_MAX_MS=0 to disable (Pro / Fluid with higher limits).
+ */
+function createEstimateWall (): { signal: AbortSignal; clear: () => void } | undefined {
+  const raw = process.env.ESTIMATE_MAX_MS?.trim()
+  const ms =
+    raw !== undefined && raw !== ''
+      ? Number.parseInt(raw, 10)
+      : process.env.VERCEL
+        ? 52_000
+        : 0
+  if (!Number.isFinite(ms) || ms <= 0) return undefined
+  const ac = new AbortController()
+  const t = setTimeout(() => ac.abort(), ms)
+  return {
+    signal: ac.signal,
+    clear: () => clearTimeout(t),
+  }
+}
+
+function shouldRetryEstimateWithoutWebSearch (error: string): boolean {
+  return /504|abort|deadline|timeout|exceeded|time budget|ECONNRESET|ETIMEDOUT|fetch failed/i.test(
+    error,
+  )
+}
 
 function headerString (v: string | string[] | undefined): string | undefined {
   if (v == null) return undefined
@@ -176,16 +201,51 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
     }
 
     let result: Awaited<ReturnType<typeof getCardValue>>
+    const wall = createEstimateWall()
+    const noAutoRetry = process.env.PRICING_NO_SEARCH_RETRY === '1'
+
     try {
-      result = await getCardValue(estimateInput, anthropicApiKey)
-    } catch (pricingErr) {
-      const msg =
-        pricingErr instanceof Error ? pricingErr.message : 'Pricing service threw an unexpected error.'
-      console.error('[estimate-card-value] getCardValue:', pricingErr)
-      return jsonError(res, 502, msg)
-    }
-    if (!result.ok) {
-      return jsonError(res, 502, result.error)
+      try {
+        result = await getCardValue(estimateInput, anthropicApiKey, {
+          signal: wall?.signal,
+        })
+      } catch (pricingErr) {
+        const msg =
+          pricingErr instanceof Error
+            ? pricingErr.message
+            : 'Pricing service threw an unexpected error.'
+        console.error('[estimate-card-value] getCardValue:', pricingErr)
+        return jsonError(res, 502, msg)
+      }
+
+      const canRetryFastPath =
+        !noAutoRetry &&
+        process.env.PRICING_SKIP_WEB_SEARCH !== '1' &&
+        !result.ok &&
+        shouldRetryEstimateWithoutWebSearch(result.error)
+
+      if (canRetryFastPath) {
+        console.warn(
+          '[estimate-card-value] Retrying estimate without web search after:',
+          result.error.slice(0, 200),
+        )
+        try {
+          result = await getCardValue(estimateInput, anthropicApiKey, { skipWebSearch: true })
+        } catch (retryErr) {
+          const msg =
+            retryErr instanceof Error
+              ? retryErr.message
+              : 'Pricing retry threw an unexpected error.'
+          console.error('[estimate-card-value] getCardValue retry:', retryErr)
+          return jsonError(res, 502, msg)
+        }
+      }
+
+      if (!result.ok) {
+        return jsonError(res, 502, result.error)
+      }
+    } finally {
+      wall?.clear()
     }
 
     const { estimate } = result
