@@ -37,6 +37,168 @@ const FAQ = [
   },
 ]
 
+type ShowcaseSlab = {
+  player: string
+  setName: string
+  cardNo: string
+  company: 'PSA' | 'BGS'
+  grade: string
+  value: string
+  /** Tailwind classes for the card-face gradient */
+  face: string
+  nameOnCard: string
+}
+
+const SHOWCASE_SLABS: ShowcaseSlab[] = [
+  {
+    player: 'Michael Jordan',
+    setName: '1986 Fleer',
+    cardNo: '#57',
+    company: 'PSA',
+    grade: '9',
+    value: '$18,500',
+    face: 'from-[#6B0F15] via-[#1a0a0c] to-[#0d0d12]',
+    nameOnCard: 'MICHAEL·JORDAN',
+  },
+  {
+    player: 'Tom Brady',
+    setName: '2000 Bowman Chrome',
+    cardNo: '#236',
+    company: 'BGS',
+    grade: '9',
+    value: '$6,200',
+    face: 'from-[#0c1929] via-[#1a2740] to-[#0a1628]',
+    nameOnCard: 'TOM·BRADY',
+  },
+  {
+    player: 'Shohei Ohtani',
+    setName: '2018 Topps Chrome',
+    cardNo: '#150',
+    company: 'PSA',
+    grade: '10',
+    value: '$3,950',
+    face: 'from-[#7f1d1d] via-[#1c1917] to-[#0c0a09]',
+    nameOnCard: 'SHOHEI·OHTANI',
+  },
+]
+
+const HOW_STEPS: { title: string; detail: string; icon: string }[] = [
+  {
+    title: 'Add cards',
+    detail:
+      'Upload front and back photos—or tap auto-identify and let AI read the slab. You review every field before it is saved.',
+    icon: '📷',
+  },
+  {
+    title: 'See your binder',
+    detail:
+      'Flip between a photo grid and a sortable table. Open any card full screen, front or back, like flipping through a real collection.',
+    icon: '🗂️',
+  },
+  {
+    title: 'Live market values',
+    detail:
+      'Estimates refresh from real eBay sold comps. Know what similar cards actually sold for—not a random guess.',
+    icon: '📈',
+  },
+  {
+    title: 'AI portfolio insights',
+    detail:
+      'Claude looks at your whole collection—grades, cost basis, and trends—and surfaces ideas worth a second look.',
+    icon: '✨',
+  },
+  {
+    title: 'Buy & sell smarter',
+    detail:
+      'Track gain or loss vs what you paid. Use the full picture—photos, values, and insights—when you decide to move a card.',
+    icon: '🎯',
+  },
+]
+
+function LandingCollectionMockup () {
+  return (
+    <div className="relative rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 shadow-2xl shadow-black/50 sm:p-5">
+      <div className="mb-4 flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slab-teal-light">Your collection</p>
+          <p className="text-[11px] text-[var(--slab-text-muted)]">Slabs with photos · live estimates</p>
+        </div>
+        <div className="rounded-full bg-slab-teal/15 px-2.5 py-1 text-[10px] font-semibold tabular-nums text-slab-teal-light">
+          +$1,248 <span className="font-normal opacity-80">est. week</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+        {SHOWCASE_SLABS.map((c) => (
+          <div key={c.player} className="flex flex-col items-center">
+            <div className="relative w-full max-w-[112px] sm:max-w-[128px]">
+              {/* Frosted slab holder */}
+              <div className="rounded-lg bg-gradient-to-b from-zinc-400/25 via-zinc-500/10 to-zinc-600/20 p-[2px] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_rgba(0,0,0,0.45)] ring-1 ring-white/5">
+                <div className="rounded-[6px] bg-zinc-950/95 p-1 sm:p-1.5">
+                  {/* Grading label strip */}
+                  <div
+                    className={[
+                      'mb-1 flex items-center justify-between rounded px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-wider sm:text-[8px]',
+                      c.company === 'PSA'
+                        ? 'bg-[#c41e1e] text-white shadow-sm shadow-red-900/50'
+                        : 'bg-gradient-to-r from-zinc-900 to-black text-amber-100 ring-1 ring-amber-600/40',
+                    ].join(' ')}
+                  >
+                    <span>{c.company}</span>
+                    <span className="tabular-nums">{c.grade}</span>
+                  </div>
+
+                  {/* Card face — trading card proportions */}
+                  <div
+                    className={[
+                      'relative aspect-[2.5/3.5] overflow-hidden rounded-sm border border-white/[0.12] shadow-inner shadow-black/60',
+                      'bg-gradient-to-br',
+                      c.face,
+                    ].join(' ')}
+                  >
+                    <div
+                      className="pointer-events-none absolute inset-0 bg-[linear-gradient(125deg,rgba(255,255,255,0.15)_0%,transparent_45%,transparent_60%,rgba(255,255,255,0.06)_100%)]"
+                      aria-hidden
+                    />
+                    <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/10 to-transparent" aria-hidden />
+
+                    <div className="absolute inset-x-1 top-2 text-center sm:inset-x-1.5 sm:top-2.5">
+                      <p className="text-[5px] font-bold uppercase tracking-[0.2em] text-white/55 sm:text-[6px]">
+                        {c.setName}
+                      </p>
+                    </div>
+
+                    <div className="absolute inset-x-1 bottom-5 flex flex-col items-center justify-end text-center sm:bottom-6">
+                      <p className="max-w-full truncate text-[6px] font-black uppercase leading-tight tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] sm:text-[7px]">
+                        {c.nameOnCard}
+                      </p>
+                      <p className="mt-0.5 text-[5px] font-semibold tabular-nums text-white/70 sm:text-[6px]">{c.cardNo}</p>
+                    </div>
+
+                    <div className="absolute bottom-0 left-0 right-0 h-[18%] bg-gradient-to-t from-black/75 to-transparent" aria-hidden />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-2.5 w-full truncate text-center text-[10px] font-semibold text-zinc-100 sm:text-[11px]">{c.player}</p>
+            <p className="w-full truncate text-center text-[9px] text-zinc-500">{c.setName}</p>
+            <p className="mt-1 text-center text-[11px] font-bold tabular-nums text-slab-teal-light sm:text-xs">{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-3 sm:p-3.5">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slab-teal-light/90">AI insight</p>
+        <p className="mt-1 text-xs leading-relaxed text-[var(--slab-text)] sm:text-[13px]">
+          Jordan and Brady estimates ticked up this week. Ohtani shows strong sold volume—worth watching if you are
+          trimming or doubling down.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function LandingPage () {
   const { user, loading } = useAuth()
   const navigate = useNavigate()
@@ -96,51 +258,7 @@ export function LandingPage () {
                 </button>
               </div>
             </div>
-            {/* Mockup */}
-            <div className="relative rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 shadow-2xl shadow-black/50">
-              <div className="mb-3 flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slab-teal-light">Collection</p>
-                  <p className="text-[11px] text-[var(--slab-text-muted)]">Photos · grid or table · live values</p>
-                </div>
-                <div className="rounded-full bg-slab-teal/15 px-2 py-1 text-[10px] font-medium text-slab-teal-light">+$1,248</div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { name: 'Michael Jordan', set: '1986 Fleer', grade: 'PSA 9', value: '$18,500', sport: '🏀' },
-                  { name: 'Tom Brady', set: '2000 Bowman', grade: 'BGS 9', value: '$6,200', sport: '🏈' },
-                  { name: 'Shohei Ohtani', set: '2018 Topps', grade: 'PSA 10', value: '$3,950', sport: '⚾' },
-                ].map((card) => (
-                  <div
-                    key={card.name}
-                    className="rounded-xl border border-slab-teal/30 bg-[linear-gradient(180deg,#1A1F27_0%,#101318_100%)] p-2.5 shadow-lg shadow-black/30"
-                  >
-                    <div className="relative aspect-[5/7] max-h-[72px] overflow-hidden rounded-md border border-zinc-700/70 bg-gradient-to-br from-zinc-800 to-zinc-950">
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-                        <span className="text-lg opacity-80" aria-hidden>
-                          {card.sport}
-                        </span>
-                        <span className="text-[8px] font-bold uppercase tracking-tight text-zinc-400">Photo</span>
-                      </div>
-                    </div>
-                    <p className="mt-2 truncate text-[10px] font-semibold text-zinc-100">{card.name}</p>
-                    <p className="truncate text-[9px] text-zinc-500">{card.set}</p>
-                    <div className="mt-1.5 rounded-md bg-slab-teal/15 px-1.5 py-0.5 text-[9px] text-slab-teal-light">
-                      {card.grade}
-                    </div>
-                    <p className="mt-1 text-[11px] font-semibold text-white">{card.value}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-3">
-                <p className="text-xs text-[var(--slab-text-muted)]">AI Insight</p>
-                <p className="mt-1 text-xs text-[var(--slab-text)]">
-                  Jordan + Brady are up 6.2% this week. Ohtani volume is rising with strong sold comps.
-                </p>
-              </div>
-            </div>
+            <LandingCollectionMockup />
           </div>
         </section>
 
@@ -196,24 +314,51 @@ export function LandingPage () {
         </section>
 
         {/* How it works */}
-        <section id="how" ref={howRef} className="scroll-mt-24 border-t border-[var(--color-border-subtle)] px-6 py-20 sm:px-10">
-          <h2 className="text-center text-3xl font-semibold tracking-tight text-[var(--slab-text)]">How it works</h2>
-          <ol className="mx-auto mt-12 grid max-w-3xl gap-8">
-            {[
-              'Add cards with photos — or use auto-identify from a front picture to pre-fill details',
-              'Organize in grid or table; optional back photos and full-size viewer',
-              'SlabBook refreshes values using live eBay sold comps',
-              'AI analyzes your portfolio and surfaces insights',
-              'Make smarter buy and sell decisions',
-            ].map((step, i) => (
-              <li key={step} className="flex gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slab-teal/20 text-sm font-bold text-slab-teal-light">
-                  {i + 1}
-                </span>
-                <p className="pt-1.5 text-[var(--slab-text)]">{step}</p>
-              </li>
-            ))}
-          </ol>
+        <section
+          id="how"
+          ref={howRef}
+          className="scroll-mt-24 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/35 px-6 py-20 sm:px-10"
+        >
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-4xl">
+              How SlabBook works
+            </h2>
+            <p className="mt-3 text-base leading-relaxed text-[var(--slab-text-muted)] sm:text-lg">
+              Five steps from your first photo to a portfolio you can actually use—no spreadsheet required.
+            </p>
+          </div>
+
+          <div className="relative mx-auto mt-14 max-w-3xl">
+            <div
+              className="pointer-events-none absolute left-[22px] top-10 bottom-10 w-px bg-gradient-to-b from-slab-teal/45 via-slab-teal/20 to-slab-teal/5 sm:left-[26px]"
+              aria-hidden
+            />
+            <ol className="relative list-none pl-0">
+              {HOW_STEPS.map((step, i) => (
+                <li key={step.title} className="relative flex gap-5 pb-12 last:pb-0 sm:gap-8">
+                  <div className="relative z-[1] flex w-11 shrink-0 justify-center sm:w-[52px]">
+                    <span
+                      className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slab-teal/30 bg-[var(--color-surface)] text-lg shadow-md shadow-black/25 ring-2 ring-[var(--color-surface)] sm:h-[52px] sm:w-[52px] sm:text-xl"
+                      aria-hidden
+                    >
+                      {step.icon}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <span className="rounded-md bg-slab-teal/15 px-2 py-0.5 text-[11px] font-bold tabular-nums uppercase tracking-wide text-slab-teal-light">
+                        Step {i + 1}
+                      </span>
+                      <h3 className="text-lg font-semibold text-[var(--slab-text)] sm:text-xl">{step.title}</h3>
+                    </div>
+                    <p className="mt-3 text-sm leading-relaxed text-[var(--slab-text-muted)] sm:text-[15px] sm:leading-relaxed">
+                      {step.detail}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
         </section>
 
         <PricingSection
