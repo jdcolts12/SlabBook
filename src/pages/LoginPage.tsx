@@ -21,6 +21,20 @@ export function LoginPage () {
   }, [])
 
   useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const desc = sp.get('error_description')?.replace(/\+/g, ' ')
+    const code = sp.get('error')
+    if (desc || code) {
+      setError(desc || code || null)
+      const url = new URL(window.location.href)
+      url.searchParams.delete('error')
+      url.searchParams.delete('error_description')
+      url.searchParams.delete('error_code')
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!authLoading && user && isSupabaseConfigured) {
       navigate(from, { replace: true })
     }

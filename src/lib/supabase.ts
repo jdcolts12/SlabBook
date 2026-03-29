@@ -16,5 +16,7 @@ export const supabase = createClient(url ?? '', anonKey ?? '', {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    // Must match GoTrue email/OAuth links (PKCE uses ?code=). Implicit-only clients fail on confirm links.
+    flowType: 'pkce',
   },
 })

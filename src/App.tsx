@@ -11,6 +11,7 @@ import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { PricingPage } from './pages/PricingPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
+import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { SignupPage } from './pages/SignupPage'
 import { BillingSettingsPage } from './pages/BillingSettingsPage'
 
@@ -24,6 +25,7 @@ function App () {
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route
             path="/dashboard"
             element={
