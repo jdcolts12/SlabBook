@@ -18,7 +18,9 @@ import {
   type SortKey,
 } from '../lib/cardMetrics'
 import { moneyFormatter, pctFormatter } from '../lib/formatters'
+import { UpgradeModal } from '../components/billing/UpgradeModal'
 import { useAuth } from '../hooks/useAuth'
+import { useUserProfile } from '../hooks/useUserProfile'
 import {
   removeCardImageByPublicUrl,
   uploadCardImageSide,
@@ -27,6 +29,8 @@ import { supabase } from '../lib/supabase'
 import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
 import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
 import { getCardValue } from '../lib/pricing-service'
+import { createCheckoutSession } from '../lib/stripeApi'
+import { effectiveTier, maxCardsForUser } from '../lib/tierLimits'
 import type { Card } from '../types/card'
 
 const money = moneyFormatter
@@ -107,7 +111,8 @@ function filterCards (
 export function CollectionPage () {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, session } = useAuth()
+  const { profile } = useUserProfile(user?.id)
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -124,6 +129,8 @@ export function CollectionPage () {
   const [gradingCompany, setGradingCompany] = useState('all')
   const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredView())
   const [imageModalCard, setImageModalCard] = useState<Card | null>(null)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const [upgradeLoading, setUpgradeLoading] = useState(false)
 
   useEffect(() => {
     try {
@@ -246,6 +253,11 @@ export function CollectionPage () {
   }
 
   function openAdd () {
+    const cap = maxCardsForUser(profile)
+    if (cards.length >= cap) {
+      setUpgradeOpen(true)
+      return
+    }
     setDialogMode('add')
     setEditing(null)
     setDialogOpen(true)
@@ -270,6 +282,11 @@ export function CollectionPage () {
     const payload = formValuesToPayload(user.id, values)
 
     if (dialogMode === 'add') {
+      const cap = maxCardsForUser(profile)
+      if (cards.length >= cap) {
+        setUpgradeOpen(true)
+        throw new Error('Collection limit reached. Upgrade to add more cards.')
+      }
       const { data: row, error } = await supabase
         .from('cards')
         .insert({
@@ -546,6 +563,34 @@ export function CollectionPage () {
           )}
         </>
       )}
+
+      <UpgradeModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        title={effectiveTier(profile) === 'collector' ? 'Upgrade to Investor' : 'Upgrade to Collector'}
+        body={
+          effectiveTier(profile) === 'collector'
+            ? "You've reached the 500 card limit on the Collector plan. Upgrade to Investor for unlimited cards, daily AI insights, and tax export."
+            : "You've reached the 15 card limit on the free plan. Upgrade to track up to 500 cards, get AI insights, and live price estimates."
+        }
+        ctaLabel={effectiveTier(profile) === 'collector' ? 'Upgrade for $12/mo' : 'Upgrade for $5/mo'}
+        ctaLoading={upgradeLoading}
+        onCta={() => {
+          if (!session?.access_token) return
+          setUpgradeLoading(true)
+          void (async () => {
+            try {
+              const tier = effectiveTier(profile) === 'collector' ? 'investor' : 'collector'
+              const url = await createCheckoutSession(session.access_token, tier, '')
+              window.location.href = url
+            } catch (e) {
+              window.alert(e instanceof Error ? e.message : 'Checkout failed.')
+            } finally {
+              setUpgradeLoading(false)
+            }
+          })()
+        }}
+      />
 
       <CardFormDialog
         open={dialogOpen}

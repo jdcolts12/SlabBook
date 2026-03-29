@@ -4,6 +4,8 @@ import { MarketingFooter } from '../components/marketing/MarketingFooter'
 import { MarketingNav } from '../components/marketing/MarketingNav'
 import { PricingSection, type TierId } from '../components/marketing/PricingSection'
 import { useAuth } from '../hooks/useAuth'
+import { useUserProfile } from '../hooks/useUserProfile'
+import { effectiveTier } from '../lib/tierLimits'
 
 const FAQ = [
   {
@@ -199,7 +201,8 @@ function LandingCollectionMockup () {
 }
 
 export function LandingPage () {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
+  const { profile } = useUserProfile(user?.id)
   const howRef = useRef<HTMLElement>(null)
   const [promoCode, setPromoCode] = useState('')
   const [selectedTier, setSelectedTier] = useState<TierId>('collector')
@@ -410,6 +413,8 @@ export function LandingPage () {
           promoCode={promoCode}
           onPromoChange={setPromoCode}
           ctaBasePath={user ? '/dashboard' : '/signup'}
+          accessToken={session?.access_token ?? null}
+          currentEffectiveTier={effectiveTier(profile)}
         />
 
         {/* FAQ */}

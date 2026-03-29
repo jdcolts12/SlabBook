@@ -4,6 +4,7 @@ import { CardImageModal } from '../components/collection/CardImageModal'
 import { CardThumbnail } from '../components/collection/CardThumbnail'
 import { MessageCircle, RefreshCw } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { useUserProfile } from '../hooks/useUserProfile'
 import { MARKET_VALUES_BANNER } from '../lib/aiValueCopy'
 import {
   cardGainDollars,
@@ -17,7 +18,9 @@ import { moneyFormatter, pctFormatter } from '../lib/formatters'
 import { isEstimateStale } from '../lib/pricingConstants'
 import { formatRelativeTime } from '../lib/relativeTime'
 import { sleep } from '../lib/sleep'
+import { createCheckoutSession } from '../lib/stripeApi'
 import { supabase } from '../lib/supabase'
+import { canUseMarketValuesTab } from '../lib/tierLimits'
 import type { Card } from '../types/card'
 
 const money = moneyFormatter
@@ -276,7 +279,9 @@ function SummaryStat ({
 }
 
 export function MarketValuesPage () {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
+  const { profile, loading: profileLoading } = useUserProfile(user?.id)
+  const [gateCheckout, setGateCheckout] = useState(false)
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -443,6 +448,61 @@ export function MarketValuesPage () {
     estimateProgress && estimateProgress.total > 0
       ? Math.round((estimateProgress.current / estimateProgress.total) * 100)
       : 0
+
+  const marketAccess = canUseMarketValuesTab(profile)
+
+  if (user && profileLoading) {
+    return (
+      <div className="flex justify-center py-24">
+        <div
+          className="h-9 w-9 animate-spin rounded-full border-2 border-zinc-700 border-t-slab-teal"
+          role="status"
+          aria-label="Loading"
+        />
+      </div>
+    )
+  }
+
+  if (user && !marketAccess) {
+    return (
+      <div className="mx-auto max-w-lg space-y-6 px-4 py-16 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Market Values</h1>
+        <p className="text-sm leading-relaxed text-zinc-400">
+          Live market value tracking and the Market Values dashboard are included with Collector and Investor plans.
+          Upgrade to see comps, trends, and bulk estimates across your collection.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <Link
+            to="/pricing"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-zinc-600 px-4 text-sm font-medium text-zinc-300 transition hover:bg-white/5"
+          >
+            View all plans
+          </Link>
+          <button
+            type="button"
+            disabled={gateCheckout || !session?.access_token}
+            onClick={() => {
+              if (!session?.access_token) return
+              setGateCheckout(true)
+              void (async () => {
+                try {
+                  const url = await createCheckoutSession(session.access_token, 'collector', '')
+                  window.location.href = url
+                } catch (e) {
+                  window.alert(e instanceof Error ? e.message : 'Checkout failed.')
+                } finally {
+                  setGateCheckout(false)
+                }
+              })()
+            }}
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-slab-teal px-5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
+          >
+            {gateCheckout ? 'Redirecting…' : 'Upgrade for $5/mo'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   function SortTh ({
     k,

@@ -14,7 +14,12 @@ create table if not exists public.users (
     check (subscription_tier in ('free', 'collector', 'investor', 'lifetime')),
   promo_code_used text,
   trial_ends_at timestamptz,
-  subscription_ends_at timestamptz
+  subscription_ends_at timestamptz,
+  stripe_customer_id text,
+  subscription_id text,
+  subscription_status text default 'free',
+  current_period_end timestamptz,
+  lifetime_access boolean not null default false
 );
 
 create index if not exists users_email_idx on public.users (email);

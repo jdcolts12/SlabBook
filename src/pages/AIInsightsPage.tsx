@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useUserProfile } from '../hooks/useUserProfile'
 import { parseInsightSections } from '../lib/parseInsightSections'
 import { formatLastAnalyzed } from '../lib/relativeTime'
+import { createCheckoutSession } from '../lib/stripeApi'
 import { supabase } from '../lib/supabase'
+import { canUseAiInsights } from '../lib/tierLimits'
 import type { AIInsight } from '../types/insight'
 
 function formatDate (value: string): string {
@@ -12,7 +16,9 @@ function formatDate (value: string): string {
 }
 
 export function AIInsightsPage () {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
+  const { profile, loading: profileLoading } = useUserProfile(user?.id)
+  const [gateCheckout, setGateCheckout] = useState(false)
   const [insights, setInsights] = useState<AIInsight[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -174,6 +180,60 @@ export function AIInsightsPage () {
 
   /** Disable only when we know the collection is empty */
   const canAnalyze = cardCount !== 0
+  const insightsAccess = canUseAiInsights(profile)
+
+  if (user && profileLoading) {
+    return (
+      <div className="flex justify-center py-24">
+        <div
+          className="h-9 w-9 animate-spin rounded-full border-2 border-zinc-700 border-t-slab-teal"
+          role="status"
+          aria-label="Loading"
+        />
+      </div>
+    )
+  }
+
+  if (user && !insightsAccess) {
+    return (
+      <div className="mx-auto max-w-lg space-y-6 px-4 py-16 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">AI Insights</h1>
+        <p className="text-sm leading-relaxed text-zinc-400">
+          Weekly and daily AI portfolio analysis is included with Collector and Investor plans. Upgrade to get
+          personalized sell opportunities, risks, and actions based on your slabs.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <Link
+            to="/pricing"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-zinc-600 px-4 text-sm font-medium text-zinc-300 transition hover:bg-white/5"
+          >
+            View all plans
+          </Link>
+          <button
+            type="button"
+            disabled={gateCheckout || !session?.access_token}
+            onClick={() => {
+              if (!session?.access_token) return
+              setGateCheckout(true)
+              void (async () => {
+                try {
+                  const url = await createCheckoutSession(session.access_token, 'collector', '')
+                  window.location.href = url
+                } catch (e) {
+                  window.alert(e instanceof Error ? e.message : 'Checkout failed.')
+                } finally {
+                  setGateCheckout(false)
+                }
+              })()
+            }}
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-slab-teal px-5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
+          >
+            {gateCheckout ? 'Redirecting…' : 'Upgrade for $5/mo'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">

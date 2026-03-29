@@ -13,6 +13,7 @@ const nav = [
   { to: '/dashboard/market-values', label: 'Market Values', end: false },
   { to: '/dashboard/insights', label: 'AI Insights', end: false },
   { to: '/dashboard/alerts', label: 'Price Alerts', end: false },
+  { to: '/dashboard/settings/billing', label: 'Billing', end: false },
 ] as const
 
 function NavIcon ({ name }: { name: (typeof nav)[number]['label'] }) {
@@ -46,6 +47,12 @@ function NavIcon ({ name }: { name: (typeof nav)[number]['label'] }) {
       return (
         <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.082M12 18h.01M5.25 6H9m-4 4h6m-6 4h6M9 3h.008v.008H9V3zm0 18h.008v.008H9V21zm12-9h.008v.008H21V12z" />
+        </svg>
+      )
+    case 'Billing':
+      return (
+        <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
         </svg>
       )
     default:

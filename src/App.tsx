@@ -12,6 +12,7 @@ import { LoginPage } from './pages/LoginPage'
 import { PricingPage } from './pages/PricingPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { SignupPage } from './pages/SignupPage'
+import { BillingSettingsPage } from './pages/BillingSettingsPage'
 
 function App () {
   return (
@@ -35,6 +36,7 @@ function App () {
             <Route path="collection" element={<CollectionPage />} />
             <Route path="market-values" element={<MarketValuesPage />} />
             <Route path="insights" element={<AIInsightsPage />} />
+            <Route path="settings/billing" element={<BillingSettingsPage />} />
             <Route
               path="alerts"
               element={

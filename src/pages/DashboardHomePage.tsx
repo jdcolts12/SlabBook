@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CardImageModal } from '../components/collection/CardImageModal'
 import { CollectionGridView } from '../components/collection/CollectionGridView'
 import { CollectionTableView } from '../components/collection/CollectionTableView'
@@ -33,6 +33,7 @@ function readDashboardView (): ViewMode {
 export function DashboardHomePage () {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +43,16 @@ export function DashboardHomePage () {
   const [estimateDone, setEstimateDone] = useState<string | null>(null)
   const [dashView, setDashView] = useState<ViewMode>(() => readDashboardView())
   const [imageModalCard, setImageModalCard] = useState<Card | null>(null)
+  const [upgradeSuccess, setUpgradeSuccess] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get('upgrade') === 'success') {
+      setUpgradeSuccess(true)
+      const next = new URLSearchParams(searchParams)
+      next.delete('upgrade')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     try {
@@ -208,6 +219,11 @@ export function DashboardHomePage () {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
+      {upgradeSuccess && (
+        <div className="rounded-lg border border-slab-teal/35 bg-slab-teal/10 px-4 py-3 text-sm text-slab-teal-light">
+          Payment successful — your plan will update in a moment. Refresh if you don&apos;t see new features yet.
+        </div>
+      )}
       <p className="rounded-lg border border-zinc-700/60 bg-zinc-900/40 px-4 py-2.5 text-xs leading-relaxed text-zinc-500">
         {AI_VALUE_DISCLAIMER}
       </p>

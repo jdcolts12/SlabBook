@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { canUseFeature, fetchUserPlan } from './lib/userTier'
 
 type ApiRequest = {
   method?: string
@@ -97,6 +98,13 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     return res.status(401).json({ error: 'Invalid or expired auth token.' })
   }
 
+  const plan = await fetchUserPlan(admin, user.id)
+  if (!canUseFeature(plan, 'ai_insights')) {
+    return res.status(403).json({
+      error: 'AI insights require a Collector plan or higher. Upgrade to unlock portfolio analysis.',
+    })
+  }
+
   const { data: cardsData, error: cardsError } = await admin
     .from('cards')
     .select(
@@ -154,8 +162,7 @@ Use exactly these Markdown section headers (##) in this order:
     }),
   })
 
-  const anthropicPayload: AnthropicErrorPayload | null =
-    await anthropicResponse.json().catch(() => null)
+  const anthropicPayload = (await anthropicResponse.json().catch(() => null)) as AnthropicErrorPayload | null
   if (!anthropicResponse.ok) {
     const msg =
       anthropicPayload?.error?.message ||

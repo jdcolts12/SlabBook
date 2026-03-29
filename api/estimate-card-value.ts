@@ -919,13 +919,15 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
         return jsonError(res, 502, msg)
       }
 
-      const canRetryFastPath =
-        !noAutoRetry &&
-        firstEstimatePassUsesWebSearch() &&
-        !result.ok &&
-        shouldRetryEstimateWithoutWebSearch(result.error)
+      let canRetryFastPath = false
+      if (!result.ok) {
+        canRetryFastPath =
+          !noAutoRetry &&
+          firstEstimatePassUsesWebSearch() &&
+          shouldRetryEstimateWithoutWebSearch(result.error)
+      }
 
-      if (canRetryFastPath) {
+      if (canRetryFastPath && !result.ok) {
         console.warn(
           '[estimate-card-value] Retrying estimate without web search after:',
           result.error.slice(0, 200),
@@ -1000,7 +1002,9 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       if (!res.headersSent && !res.writableEnded) {
         res.statusCode = 500
         res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(JSON.stringify({ error: safe }))
+        if (typeof res.end === 'function') {
+          res.end(JSON.stringify({ error: safe }))
+        }
       }
     } catch (sendErr) {
       console.error('[estimate-card-value] failed to send JSON error:', sendErr)
