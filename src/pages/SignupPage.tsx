@@ -47,7 +47,8 @@ export function SignupPage () {
       return
     }
     setSubmitting(true)
-    const redirectTo = `${window.location.origin}/auth/callback`
+    // Must match an entry in Supabase → Authentication → Redirect URLs (e.g. /dashboard or /auth/callback).
+    const redirectTo = `${window.location.origin}/dashboard`
     const { data, error: signError } = await supabase.auth.signUp({
       email,
       password,
