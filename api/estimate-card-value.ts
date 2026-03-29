@@ -61,8 +61,25 @@ type CardRow = {
   pricing_source: string | null
 }
 
+/** Always send valid JSON; avoids empty/HTML/plain-text 500s if res.json() misbehaves. */
 function jsonError (res: VercelResponse, status: number, error: string) {
-  res.status(status).json({ error })
+  const safe =
+    error.length > 8000 ? `${error.slice(0, 8000)}…` : error.replace(/\u2028|\u2029/g, ' ')
+  if (res.writableEnded || res.headersSent) return
+  const body = JSON.stringify({ error: safe })
+  res.statusCode = status
+  res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  res.setHeader('Content-Length', Buffer.byteLength(body, 'utf8'))
+  res.end(body)
+}
+
+function jsonOk (res: VercelResponse, status: number, body: Record<string, unknown>) {
+  if (res.writableEnded || res.headersSent) return
+  const raw = JSON.stringify(body)
+  res.statusCode = status
+  res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  res.setHeader('Content-Length', Buffer.byteLength(raw, 'utf8'))
+  res.end(raw)
 }
 
 export default async function handler (req: VercelRequest, res: VercelResponse) {
@@ -129,7 +146,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
       card.current_value != null
 
     if (fresh && !forceRefresh) {
-      return res.status(200).json({
+      return jsonOk(res, 200, {
         cached: true,
         current_value: card.current_value,
         value_low: (row as { value_low?: number | null }).value_low ?? null,
@@ -205,7 +222,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
       console.error('[estimate-card-value] price_history insert skipped:', histErr.message)
     }
 
-    return res.status(200).json({
+    return jsonOk(res, 200, {
       cached: false,
       current_value: estimate.mid,
       value_low: estimate.low,
