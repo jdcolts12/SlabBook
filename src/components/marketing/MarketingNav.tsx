@@ -1,7 +1,10 @@
 import { Link } from 'react-router-dom'
 import { SlabBookLogo } from '../SlabBookLogo'
+import { useAuth } from '../../hooks/useAuth'
 
 export function MarketingNav () {
+  const { user } = useAuth()
+
   return (
     <header className="relative z-20 flex items-center justify-between border-b border-[var(--color-border-subtle)] bg-[var(--color-surface)]/90 px-6 py-4 backdrop-blur sm:px-10">
       <Link
@@ -17,15 +20,31 @@ export function MarketingNav () {
         <Link to="/pricing" className="text-[var(--slab-text-muted)] hover:text-[var(--slab-text)]">
           Pricing
         </Link>
-        <Link to="/login" className="text-[var(--slab-text-muted)] hover:text-[var(--slab-text)]">
-          Login
-        </Link>
-        <Link
-          to="/signup"
-          className="rounded-lg bg-slab-teal px-4 py-2 font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
-        >
-          Sign Up
-        </Link>
+        {user ? (
+          <>
+            <Link to="/dashboard/collection" className="text-[var(--slab-text-muted)] hover:text-[var(--slab-text)]">
+              Collection
+            </Link>
+            <Link
+              to="/dashboard"
+              className="rounded-lg bg-slab-teal px-4 py-2 font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
+            >
+              Dashboard
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link to="/login" className="text-[var(--slab-text-muted)] hover:text-[var(--slab-text)]">
+              Login
+            </Link>
+            <Link
+              to="/signup"
+              className="rounded-lg bg-slab-teal px-4 py-2 font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
+            >
+              Sign Up
+            </Link>
+          </>
+        )}
       </nav>
     </header>
   )

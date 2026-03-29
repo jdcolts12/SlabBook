@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { MarketingFooter } from '../components/marketing/MarketingFooter'
 import { MarketingNav } from '../components/marketing/MarketingNav'
 import { PricingSection, type TierId } from '../components/marketing/PricingSection'
 import { useAuth } from '../hooks/useAuth'
-import { isSupabaseConfigured } from '../lib/supabase'
 
 const FAQ = [
   {
@@ -200,8 +199,7 @@ function LandingCollectionMockup () {
 }
 
 export function LandingPage () {
-  const { user, loading } = useAuth()
-  const navigate = useNavigate()
+  const { user } = useAuth()
   const howRef = useRef<HTMLElement>(null)
   const [promoCode, setPromoCode] = useState('')
   const [selectedTier, setSelectedTier] = useState<TierId>('collector')
@@ -209,12 +207,6 @@ export function LandingPage () {
   useEffect(() => {
     document.title = 'SlabBook — Photos, AI identify & live card values'
   }, [])
-
-  useEffect(() => {
-    if (!loading && user && isSupabaseConfigured) {
-      navigate('/dashboard', { replace: true })
-    }
-  }, [user, loading, navigate])
 
   function scrollToHow () {
     howRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -243,19 +235,45 @@ export function LandingPage () {
                 that help you buy and sell smarter.
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
-                <Link
-                  to="/signup"
-                  className="inline-flex items-center justify-center rounded-xl bg-slab-teal px-8 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light"
-                >
-                  Start Free
-                </Link>
-                <button
-                  type="button"
-                  onClick={scrollToHow}
-                  className="inline-flex items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-8 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40"
-                >
-                  See How It Works
-                </button>
+                {user ? (
+                  <>
+                    <Link
+                      to="/dashboard"
+                      className="inline-flex items-center justify-center rounded-xl bg-slab-teal px-8 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light"
+                    >
+                      Open dashboard
+                    </Link>
+                    <Link
+                      to="/dashboard/collection"
+                      className="inline-flex items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-8 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40"
+                    >
+                      My collection
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={scrollToHow}
+                      className="inline-flex items-center justify-center rounded-xl border border-transparent px-2 py-3.5 text-base font-medium text-[var(--slab-text-muted)] underline-offset-4 transition hover:text-[var(--slab-text)] hover:underline sm:px-4"
+                    >
+                      How it works
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/signup"
+                      className="inline-flex items-center justify-center rounded-xl bg-slab-teal px-8 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light"
+                    >
+                      Start Free
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={scrollToHow}
+                      className="inline-flex items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-8 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40"
+                    >
+                      See How It Works
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             <LandingCollectionMockup />
@@ -366,6 +384,7 @@ export function LandingPage () {
           onSelectTier={setSelectedTier}
           promoCode={promoCode}
           onPromoChange={setPromoCode}
+          ctaBasePath={user ? '/dashboard' : '/signup'}
         />
 
         {/* FAQ */}
