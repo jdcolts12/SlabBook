@@ -12,6 +12,8 @@ export type Card = {
   grade: string | null
   grading_company: string | null
   condition: string | null
+  image_front_url: string | null
+  image_back_url: string | null
   purchase_price: number | null
   purchase_date: string | null
   current_value: number | null

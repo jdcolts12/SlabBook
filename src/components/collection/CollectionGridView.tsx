@@ -1,6 +1,7 @@
 import type { Card } from '../../types/card'
 import { cardGainDollars, cardGainPercent, formatGradeLine } from '../../lib/cardMetrics'
 import { pctFormatter } from '../../lib/formatters'
+import { CardThumbnail } from './CardThumbnail'
 import { CardValueDisplay } from './CardValueDisplay'
 
 type Props = {
@@ -10,6 +11,8 @@ type Props = {
   onRefresh: (c: Card) => void
   onEdit: (c: Card) => void
   onDelete: (c: Card) => void
+  onViewImage: (c: Card) => void
+  showActions?: boolean
 }
 
 export function CollectionGridView ({
@@ -19,6 +22,8 @@ export function CollectionGridView ({
   onRefresh,
   onEdit,
   onDelete,
+  onViewImage,
+  showActions = true,
 }: Props) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -28,50 +33,53 @@ export function CollectionGridView ({
         const gainPositive = d != null && d >= 0
         const paid = c.purchase_price != null ? Number(c.purchase_price) : null
         const est = c.current_value != null ? Number(c.current_value) : null
+        const setLine = [c.year != null ? String(c.year) : null, c.set_name?.trim() || null]
+          .filter(Boolean)
+          .join(' · ')
         return (
           <article
             key={c.id}
-            className="flex flex-col rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 transition hover:border-zinc-600/80"
+            className="flex min-h-[320px] flex-col overflow-hidden rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] transition hover:border-zinc-600/80"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h3 className="truncate text-lg font-semibold text-white">{c.player_name}</h3>
-                <p className="mt-0.5 text-sm text-zinc-500">
-                  {[c.year, c.sport].filter(Boolean).join(' · ') || '—'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void onRefresh(c)}
-                disabled={Boolean(refreshingIds[c.id])}
-                className="shrink-0 rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-50"
-                title="Refresh AI estimate"
-                aria-label="Refresh AI estimate"
-              >
-                {refreshingIds[c.id] ? '…' : '↻'}
-              </button>
+            <div className="relative min-h-0 flex-[3] basis-0">
+              <CardThumbnail
+                card={c}
+                variant="fill"
+                className="!rounded-none"
+                onClick={() => onViewImage(c)}
+              />
             </div>
-            <p className="mt-3 line-clamp-2 text-sm text-zinc-400">
-              {c.set_name ?? 'No set'}
-              {c.card_number ? ` · #${c.card_number}` : ''}
-            </p>
-            <p className="mt-1 text-sm text-zinc-500">{formatGradeLine(c)}</p>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <dt className="text-xs text-zinc-500">Paid</dt>
-                <dd className="mt-0.5 tabular-nums text-zinc-300">
-                  {c.purchase_price != null ? money.format(Number(c.purchase_price)) : '—'}
-                </dd>
+            <div className="flex min-h-0 flex-[2] basis-0 flex-col p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="truncate text-lg font-semibold text-white">{c.player_name}</h3>
+                  <p className="mt-0.5 truncate text-sm text-zinc-500">{setLine || '—'}</p>
+                </div>
+                {showActions && (
+                  <button
+                    type="button"
+                    onClick={() => void onRefresh(c)}
+                    disabled={Boolean(refreshingIds[c.id])}
+                    className="shrink-0 rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-50"
+                    title="Refresh AI estimate"
+                    aria-label="Refresh AI estimate"
+                  >
+                    {refreshingIds[c.id] ? '…' : '↻'}
+                  </button>
+                )}
               </div>
-              <div className="col-span-2">
-                <dt className="text-xs text-zinc-500">Est. value</dt>
-                <dd className="mt-0.5">
+              <p className="mt-2 truncate text-xs font-medium uppercase tracking-wide text-zinc-400">
+                {formatGradeLine(c)}
+              </p>
+              <div className="mt-3 min-w-0 flex-1">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Est. value</p>
+                <div className="mt-1 text-2xl font-bold tabular-nums leading-tight text-white">
                   <CardValueDisplay card={c} money={money} align="left" />
-                </dd>
+                </div>
               </div>
-              <div className="col-span-2">
-                <dt className="text-xs text-zinc-500">Gain / loss</dt>
-                <dd className="mt-0.5">
+              <div className="mt-3 border-t border-[var(--color-border-subtle)] pt-3">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Gain / loss</p>
+                <div className="mt-1">
                   {paid != null && est != null && d != null ? (
                     <div className="text-sm leading-snug">
                       <p className="text-zinc-500">
@@ -109,24 +117,26 @@ export function CollectionGridView ({
                       )}
                     </>
                   )}
-                </dd>
+                </div>
               </div>
-            </dl>
-            <div className="mt-4 flex gap-2 border-t border-[var(--color-border-subtle)] pt-4">
-              <button
-                type="button"
-                onClick={() => onEdit(c)}
-                className="flex-1 rounded-lg border border-zinc-600/80 py-2 text-sm font-medium text-slab-teal transition hover:bg-white/5"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => void onDelete(c)}
-                className="rounded-lg border border-transparent py-2 px-3 text-sm text-zinc-500 hover:bg-red-500/10 hover:text-red-300"
-              >
-                Delete
-              </button>
+              {showActions && (
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onEdit(c)}
+                    className="flex-1 rounded-lg border border-zinc-600/80 py-2 text-sm font-medium text-slab-teal transition hover:bg-white/5"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onDelete(c)}
+                    className="rounded-lg border border-transparent py-2 px-3 text-sm text-zinc-500 hover:bg-red-500/10 hover:text-red-300"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           </article>
         )

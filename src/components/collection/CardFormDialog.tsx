@@ -7,13 +7,26 @@ import {
   validateCardForm,
   variationFromFormValues,
 } from '../../lib/cardForm'
+import { compressImageForVision } from '../../lib/cardImageCompress'
+import { identifyCardFromImage } from '../../lib/identifyCardApi'
+import { supabase } from '../../lib/supabase'
+import { CardPhotoDropzone } from './CardPhotoDropzone'
+
+export type CardFormSubmitPayload = {
+  values: CardFormValues
+  draftCardId: string
+  imageFront: File | null
+  imageBack: File | null
+  removeImageFront: boolean
+  removeImageBack: boolean
+}
 
 type CardFormDialogProps = {
   open: boolean
   mode: 'add' | 'edit'
   initial: Card | null
   onClose: () => void
-  onSubmit: (values: CardFormValues) => Promise<void>
+  onSubmit: (payload: CardFormSubmitPayload) => Promise<void>
 }
 
 const VARIATION_PRESETS = [
@@ -98,6 +111,22 @@ function cardToForm (c: Card): CardFormValues {
   }
 }
 
+function matchGrade (raw: string): string {
+  const t = raw.trim()
+  if ((GRADE_OPTIONS as readonly string[]).includes(t)) return t
+  for (const opt of GRADE_OPTIONS) {
+    if (t.includes(opt)) return opt
+  }
+  const m = t.match(/\b(\d{1,2}(?:\.\d)?)\b/)
+  if (m && (GRADE_OPTIONS as readonly string[]).includes(m[1]!)) return m[1]!
+  return ''
+}
+
+function normalizeIdentifyYear (raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4)
+  return digits
+}
+
 export function CardFormDialog ({
   open,
   mode,
@@ -109,17 +138,54 @@ export function CardFormDialog ({
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [playerInput, setPlayerInput] = useState('')
+  const [draftCardId, setDraftCardId] = useState(() => crypto.randomUUID())
+  const [frontFile, setFrontFile] = useState<File | null>(null)
+  const [backFile, setBackFile] = useState<File | null>(null)
+  const [frontObjectUrl, setFrontObjectUrl] = useState<string | null>(null)
+  const [backObjectUrl, setBackObjectUrl] = useState<string | null>(null)
+  const [removeFront, setRemoveFront] = useState(false)
+  const [removeBack, setRemoveBack] = useState(false)
+  const [identifyBanner, setIdentifyBanner] = useState<string | null>(null)
+  const [identifying, setIdentifying] = useState(false)
+  const [verifyLowConfidence, setVerifyLowConfidence] = useState(false)
+
+  useEffect(() => {
+    if (!frontFile) {
+      setFrontObjectUrl(null)
+      return
+    }
+    const u = URL.createObjectURL(frontFile)
+    setFrontObjectUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [frontFile])
+
+  useEffect(() => {
+    if (!backFile) {
+      setBackObjectUrl(null)
+      return
+    }
+    const u = URL.createObjectURL(backFile)
+    setBackObjectUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [backFile])
 
   useEffect(() => {
     if (!open) return
     setError(null)
-    if (mode === 'edit' && initial) {
+    setIdentifyBanner(null)
+    setVerifyLowConfidence(false)
+    setFrontFile(null)
+    setBackFile(null)
+    setRemoveFront(false)
+    setRemoveBack(false)
+    if (mode === 'add') {
+      setDraftCardId(crypto.randomUUID())
+      setForm(emptyForm)
+      setPlayerInput('')
+    } else if (initial) {
       const next = cardToForm(initial)
       setForm(next)
       setPlayerInput(next.player_name)
-    } else {
-      setForm(emptyForm)
-      setPlayerInput('')
     }
   }, [open, mode, initial])
 
@@ -152,12 +218,88 @@ export function CardFormDialog ({
     }
   }, [form])
 
+  const frontPreviewUrl =
+    removeFront ? null : (frontObjectUrl ?? initial?.image_front_url?.trim() ?? null)
+  const backPreviewUrl =
+    removeBack ? null : (backObjectUrl ?? initial?.image_back_url?.trim() ?? null)
+
+  const canIdentify =
+    Boolean(frontFile) ||
+    Boolean(mode === 'edit' && initial?.image_front_url && !removeFront)
+
   const datalistId = 'slabbook-player-suggestions'
 
-  if (!open) return null
+  const ringBlock = verifyLowConfidence
+    ? 'rounded-lg p-2 ring-2 ring-amber-500/45 ring-offset-2 ring-offset-[var(--color-surface-raised)]'
+    : ''
 
   const inputCls =
     'mt-1 w-full rounded-lg border border-zinc-700 bg-[var(--color-surface)] px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20'
+
+  async function runAutoIdentify () {
+    setError(null)
+    setIdentifyBanner(null)
+    setIdentifying(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Sign in required.')
+      }
+
+      let vision: { base64: string; media_type: 'image/jpeg' }
+      if (frontFile) {
+        vision = await compressImageForVision(frontFile)
+      } else if (initial?.image_front_url && !removeFront) {
+        const r = await fetch(initial.image_front_url)
+        if (!r.ok) throw new Error('Could not load the front photo.')
+        const blob = await r.blob()
+        const f = new File([blob], 'front.jpg', { type: blob.type || 'image/jpeg' })
+        vision = await compressImageForVision(f)
+      } else {
+        throw new Error('Add a front photo first.')
+      }
+
+      const res = await identifyCardFromImage(
+        vision.base64,
+        vision.media_type,
+        session.access_token,
+      )
+      if (res.error) throw new Error(res.error)
+
+      const nextSport = res.sport ? parseSport(res.sport) : undefined
+      const yDigits = res.year ? normalizeIdentifyYear(res.year) : ''
+      const yearNext = yDigits.length === 4 ? yDigits : undefined
+      const graded =
+        typeof res.is_graded === 'boolean'
+          ? res.is_graded
+          : Boolean(res.grading_company?.trim() || res.grade?.trim())
+
+      setForm((f) => ({
+        ...f,
+        player_name: res.player_name?.trim() || f.player_name,
+        sport: nextSport ?? f.sport,
+        year: yearNext ?? f.year,
+        set_name: res.set_name?.trim() || f.set_name,
+        card_number: res.card_number?.trim() || f.card_number,
+        variation_preset: '',
+        variation_extra: res.variation?.trim() || f.variation_extra,
+        is_graded: graded,
+        grading_company: graded ? (res.grading_company?.trim() || f.grading_company) : '',
+        grade: graded ? (matchGrade(res.grade ?? '') || f.grade) : '',
+        condition: graded ? '' : f.condition || 'Near Mint',
+      }))
+      setPlayerInput((prev) => res.player_name?.trim() || prev)
+
+      setVerifyLowConfidence(res.confidence === 'low')
+      setIdentifyBanner('Card identified! Please verify the details below.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not identify card.')
+    } finally {
+      setIdentifying(false)
+    }
+  }
 
   async function handleSubmit (e: FormEvent) {
     e.preventDefault()
@@ -167,9 +309,17 @@ export function CardFormDialog ({
       setError(v)
       return
     }
+    const id = mode === 'edit' && initial ? initial.id : draftCardId
     setSaving(true)
     try {
-      await onSubmit(form)
+      await onSubmit({
+        values: form,
+        draftCardId: id,
+        imageFront: frontFile,
+        imageBack: backFile,
+        removeImageFront: removeFront,
+        removeImageBack: removeBack,
+      })
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -177,6 +327,14 @@ export function CardFormDialog ({
       setSaving(false)
     }
   }
+
+  if (!open) return null
+
+  const companyUnknown =
+    Boolean(form.grading_company) &&
+    !(GRADING_COMPANIES as readonly string[]).includes(form.grading_company)
+  const gradeUnknown =
+    Boolean(form.grade) && !(GRADE_OPTIONS as readonly string[]).includes(form.grade)
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4">
@@ -212,156 +370,218 @@ export function CardFormDialog ({
           <form onSubmit={handleSubmit} className="grid gap-0 lg:grid-cols-2">
             <div className="space-y-4 border-b border-[var(--color-border-subtle)] p-5 lg:border-b-0 lg:border-r">
               <div>
-                <label htmlFor="sport" className="text-sm font-medium text-zinc-300">
-                  Sport <span className="text-red-400">*</span>
-                </label>
-                <select
-                  id="sport"
-                  value={form.sport}
-                  onChange={(e) => {
-                    const sport = e.target.value as Sport
-                    setForm((f) => ({
-                      ...f,
-                      sport,
-                      set_name: '',
-                    }))
-                  }}
-                  className={inputCls}
-                >
-                  {SPORTS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="player_name" className="text-sm font-medium text-zinc-300">
-                  Player name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  id="player_name"
-                  list={datalistId}
-                  required
-                  autoComplete="off"
-                  value={playerInput}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setPlayerInput(v)
-                    setForm((f) => ({ ...f, player_name: v }))
-                  }}
-                  className={inputCls}
-                  placeholder="Start typing — suggestions from top names"
-                />
-                <datalist id={datalistId}>
-                  {playerOptions.map((name) => (
-                    <option key={name} value={name} />
-                  ))}
-                </datalist>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="year" className="text-sm font-medium text-zinc-300">
-                    Year
-                  </label>
-                  <input
-                    id="year"
-                    type="number"
-                    inputMode="numeric"
-                    value={form.year}
-                    onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))}
-                    className={inputCls}
-                    placeholder="2020"
-                    min={1800}
-                    max={2100}
+                <h3 className="text-sm font-semibold text-zinc-300">Photos (optional)</h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Front and back upload on save. Images are stored in your SlabBook folder.
+                </p>
+                <div className="mt-3 flex flex-col gap-4 sm:flex-row">
+                  <CardPhotoDropzone
+                    label="Front of card"
+                    file={frontFile}
+                    existingUrl={mode === 'edit' && initial && !removeFront ? initial.image_front_url : null}
+                    previewUrl={frontPreviewUrl}
+                    onFile={(f) => {
+                      setRemoveFront(false)
+                      setFrontFile(f)
+                    }}
+                    onRemove={() => {
+                      setFrontFile(null)
+                      setRemoveFront(true)
+                    }}
+                    disabled={saving || identifying}
+                  />
+                  <CardPhotoDropzone
+                    label="Back of card"
+                    file={backFile}
+                    existingUrl={mode === 'edit' && initial && !removeBack ? initial.image_back_url : null}
+                    previewUrl={backPreviewUrl}
+                    onFile={(f) => {
+                      setRemoveBack(false)
+                      setBackFile(f)
+                    }}
+                    onRemove={() => {
+                      setBackFile(null)
+                      setRemoveBack(true)
+                    }}
+                    disabled={saving || identifying}
                   />
                 </div>
-                <div>
-                  <label htmlFor="card_number" className="text-sm font-medium text-zinc-300">
-                    Card #
-                  </label>
-                  <input
-                    id="card_number"
-                    value={form.card_number}
-                    onChange={(e) => setForm((f) => ({ ...f, card_number: e.target.value }))}
-                    className={inputCls}
-                    placeholder="#161"
-                  />
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => void runAutoIdentify()}
+                    disabled={!canIdentify || saving || identifying}
+                    className="rounded-lg border border-slab-teal/40 bg-slab-teal/10 px-3 py-2 text-sm font-medium text-slab-teal-muted transition hover:bg-slab-teal/20 disabled:opacity-50"
+                  >
+                    {identifying ? 'Identifying…' : 'Auto-identify this card'}
+                  </button>
                 </div>
+                {identifyBanner && (
+                  <p className="mt-2 rounded-lg border border-slab-teal/30 bg-slab-teal/10 px-3 py-2 text-sm text-slab-teal-light">
+                    {identifyBanner}
+                  </p>
+                )}
               </div>
 
-              <div>
-                <label htmlFor="set_name" className="text-sm font-medium text-zinc-300">
-                  Set
-                </label>
-                <select
-                  id="set_name"
-                  value={setOptions.includes(form.set_name) ? form.set_name : ''}
-                  onChange={(e) => setForm((f) => ({ ...f, set_name: e.target.value }))}
-                  className={inputCls}
-                >
-                  <option value="">Select a set…</option>
-                  {setOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-zinc-500">Filtered by sport. Override or enter a custom name below.</p>
-                <input
-                  type="text"
-                  value={form.set_name}
-                  onChange={(e) => setForm((f) => ({ ...f, set_name: e.target.value }))}
-                  className={`${inputCls} mt-2`}
-                  placeholder="Custom set name"
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className={ringBlock}>
                 <div>
-                  <label htmlFor="variation_preset" className="text-sm font-medium text-zinc-300">
-                    Variation
+                  <label htmlFor="sport" className="text-sm font-medium text-zinc-300">
+                    Sport <span className="text-red-400">*</span>
                   </label>
                   <select
-                    id="variation_preset"
-                    value={form.variation_preset}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, variation_preset: e.target.value }))
-                    }
+                    id="sport"
+                    value={form.sport}
+                    onChange={(e) => {
+                      const sport = e.target.value as Sport
+                      setForm((f) => ({
+                        ...f,
+                        sport,
+                        set_name: '',
+                      }))
+                    }}
                     className={inputCls}
                   >
-                    <option value="">Common…</option>
-                    {VARIATION_PRESETS.map((v) => (
-                      <option key={v} value={v}>
-                        {v}
+                    {SPORTS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
                       </option>
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label htmlFor="variation_extra" className="text-sm font-medium text-zinc-300">
-                    Extra detail
+
+                <div className="mt-4">
+                  <label htmlFor="player_name" className="text-sm font-medium text-zinc-300">
+                    Player name <span className="text-red-400">*</span>
                   </label>
                   <input
-                    id="variation_extra"
-                    value={form.variation_extra}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, variation_extra: e.target.value }))
-                    }
+                    id="player_name"
+                    list={datalistId}
+                    required
+                    autoComplete="off"
+                    value={playerInput}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setPlayerInput(v)
+                      setForm((f) => ({ ...f, player_name: v }))
+                    }}
                     className={inputCls}
-                    placeholder="e.g. /99, color match"
+                    placeholder="Start typing — suggestions from top names"
+                  />
+                  <datalist id={datalistId}>
+                    {playerOptions.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              <div className={ringBlock}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="year" className="text-sm font-medium text-zinc-300">
+                      Year
+                    </label>
+                    <input
+                      id="year"
+                      type="number"
+                      inputMode="numeric"
+                      value={form.year}
+                      onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))}
+                      className={inputCls}
+                      placeholder="2020"
+                      min={1800}
+                      max={2100}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="card_number" className="text-sm font-medium text-zinc-300">
+                      Card #
+                    </label>
+                    <input
+                      id="card_number"
+                      value={form.card_number}
+                      onChange={(e) => setForm((f) => ({ ...f, card_number: e.target.value }))}
+                      className={inputCls}
+                      placeholder="#161"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className={ringBlock}>
+                <div>
+                  <label htmlFor="set_name" className="text-sm font-medium text-zinc-300">
+                    Set
+                  </label>
+                  <select
+                    id="set_name"
+                    value={setOptions.includes(form.set_name) ? form.set_name : ''}
+                    onChange={(e) => setForm((f) => ({ ...f, set_name: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">Select a set…</option>
+                    {setOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-zinc-500">Filtered by sport. Override or enter a custom name below.</p>
+                  <input
+                    type="text"
+                    value={form.set_name}
+                    onChange={(e) => setForm((f) => ({ ...f, set_name: e.target.value }))}
+                    className={`${inputCls} mt-2`}
+                    placeholder="Custom set name"
                   />
                 </div>
               </div>
-              <p className="text-xs text-zinc-500">
-                {form.variation_preset === 'Other'
-                  ? 'Using Extra detail as the full variation text.'
-                  : 'Combined: preset + extra (e.g. Silver + /25).'}
-              </p>
 
-              <fieldset className="rounded-lg border border-zinc-700/80 p-4">
+              <div className={ringBlock}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="variation_preset" className="text-sm font-medium text-zinc-300">
+                      Variation
+                    </label>
+                    <select
+                      id="variation_preset"
+                      value={form.variation_preset}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, variation_preset: e.target.value }))
+                      }
+                      className={inputCls}
+                    >
+                      <option value="">Common…</option>
+                      {VARIATION_PRESETS.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="variation_extra" className="text-sm font-medium text-zinc-300">
+                      Extra detail
+                    </label>
+                    <input
+                      id="variation_extra"
+                      value={form.variation_extra}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, variation_extra: e.target.value }))
+                      }
+                      className={inputCls}
+                      placeholder="e.g. /99, color match"
+                    />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-zinc-500">
+                  {form.variation_preset === 'Other'
+                    ? 'Using Extra detail as the full variation text.'
+                    : 'Combined: preset + extra (e.g. Silver + /25).'}
+                </p>
+              </div>
+
+              <fieldset className={`rounded-lg border border-zinc-700/80 p-4 ${verifyLowConfidence ? 'ring-2 ring-amber-500/45' : ''}`}>
                 <legend className="px-1 text-sm font-medium text-zinc-300">Grading</legend>
                 <label className="flex cursor-pointer items-center gap-3">
                   <input
@@ -396,6 +616,9 @@ export function CardFormDialog ({
                         required={form.is_graded}
                       >
                         <option value="">Select…</option>
+                        {companyUnknown && (
+                          <option value={form.grading_company}>{form.grading_company}</option>
+                        )}
                         {GRADING_COMPANIES.map((c) => (
                           <option key={c} value={c}>
                             {c}
@@ -415,6 +638,7 @@ export function CardFormDialog ({
                         required={form.is_graded}
                       >
                         <option value="">Select…</option>
+                        {gradeUnknown && <option value={form.grade}>{form.grade}</option>}
                         {GRADE_OPTIONS.map((g) => (
                           <option key={g} value={g}>
                             {g}

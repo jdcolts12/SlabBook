@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { CardImageModal } from '../components/collection/CardImageModal'
+import { CardThumbnail } from '../components/collection/CardThumbnail'
 import { MessageCircle, RefreshCw } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { MARKET_VALUES_BANNER } from '../lib/aiValueCopy'
@@ -221,17 +223,26 @@ function GainLossCell ({ c }: { c: Card }) {
   )
 }
 
-function CardDetailsCell ({ c }: { c: Card }) {
+function CardDetailsCell ({
+  c,
+  onViewImage,
+}: {
+  c: Card
+  onViewImage: () => void
+}) {
   const bits = [c.year != null ? String(c.year) : null, c.set_name?.trim() || null].filter(Boolean)
   const sub = bits.join(' · ')
   return (
-    <div className="min-w-0">
-      <p className="font-medium text-white">{c.player_name}</p>
-      {sub && <p className="mt-0.5 truncate text-[11px] text-zinc-500" title={sub}>{sub}</p>}
-      <p className="text-[11px] text-zinc-500">
-        {formatGradeLine(c)}
-        {c.card_number ? ` · #${c.card_number}` : ''}
-      </p>
+    <div className="flex min-w-0 items-center gap-3">
+      <CardThumbnail card={c} variant="table" onClick={onViewImage} />
+      <div className="min-w-0">
+        <p className="font-medium text-white">{c.player_name}</p>
+        {sub && <p className="mt-0.5 truncate text-[11px] text-zinc-500" title={sub}>{sub}</p>}
+        <p className="text-[11px] text-zinc-500">
+          {formatGradeLine(c)}
+          {c.card_number ? ` · #${c.card_number}` : ''}
+        </p>
+      </div>
     </div>
   )
 }
@@ -273,6 +284,7 @@ export function MarketValuesPage () {
   const [estimateProgress, setEstimateProgress] = useState<{ current: number; total: number } | null>(null)
   const [estimateDone, setEstimateDone] = useState<string | null>(null)
   const [refreshingIds, setRefreshingIds] = useState<Record<string, boolean>>({})
+  const [imageModalCard, setImageModalCard] = useState<Card | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('gain_pct')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
@@ -628,7 +640,7 @@ export function MarketValuesPage () {
                         ].join(' ')}
                       >
                         <td className="px-3 py-3 lg:px-4">
-                          <CardDetailsCell c={c} />
+                          <CardDetailsCell c={c} onViewImage={() => setImageModalCard(c)} />
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums text-zinc-300 lg:px-4">
                           {c.purchase_price != null ? money.format(Number(c.purchase_price)) : '—'}
@@ -709,6 +721,12 @@ export function MarketValuesPage () {
           </p>
         </>
       )}
+
+      <CardImageModal
+        card={imageModalCard}
+        open={imageModalCard != null}
+        onClose={() => setImageModalCard(null)}
+      />
     </div>
   )
 }

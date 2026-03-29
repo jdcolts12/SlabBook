@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CardFormDialog } from '../components/collection/CardFormDialog'
+import { CardFormDialog, type CardFormSubmitPayload } from '../components/collection/CardFormDialog'
+import { CardImageModal } from '../components/collection/CardImageModal'
 import { CollectionGridView } from '../components/collection/CollectionGridView'
 import { PortfolioSummaryBar } from '../components/collection/PortfolioSummaryBar'
 import { CollectionTableView } from '../components/collection/CollectionTableView'
@@ -17,6 +18,10 @@ import {
 } from '../lib/cardMetrics'
 import { moneyFormatter, pctFormatter } from '../lib/formatters'
 import { useAuth } from '../hooks/useAuth'
+import {
+  removeCardImageByPublicUrl,
+  uploadCardImageSide,
+} from '../lib/cardImageStorage'
 import { supabase } from '../lib/supabase'
 import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
 import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
@@ -39,10 +44,12 @@ function parseOptionalInt (raw: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function formValuesToPayload (
-  userId: string,
-  v: CardFormValues,
-): Omit<Card, 'id' | 'created_at' | 'last_updated'> {
+type CardWritable = Omit<
+  Card,
+  'id' | 'created_at' | 'last_updated' | 'image_front_url' | 'image_back_url'
+>
+
+function formValuesToPayload (userId: string, v: CardFormValues): CardWritable {
   return {
     user_id: userId,
     sport: v.sport,
@@ -113,6 +120,7 @@ export function CollectionPage () {
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>('all')
   const [gradingCompany, setGradingCompany] = useState('all')
   const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredView())
+  const [imageModalCard, setImageModalCard] = useState<Card | null>(null)
 
   useEffect(() => {
     try {
@@ -230,33 +238,106 @@ export function CollectionPage () {
     setDialogOpen(true)
   }
 
-  async function handleSubmit (values: CardFormValues) {
+  async function handleSubmit (submit: CardFormSubmitPayload) {
     if (!user) throw new Error('Not signed in.')
+    const {
+      values,
+      draftCardId,
+      imageFront,
+      imageBack,
+      removeImageFront,
+      removeImageBack,
+    } = submit
     const payload = formValuesToPayload(user.id, values)
 
     if (dialogMode === 'add') {
       const { data: row, error } = await supabase
         .from('cards')
         .insert({
+          id: draftCardId,
           ...payload,
+          image_front_url: null,
+          image_back_url: null,
           last_updated: new Date().toISOString(),
         })
         .select('*')
         .single()
       if (error) throw new Error(error.message)
+
+      let image_front_url: string | null = null
+      let image_back_url: string | null = null
+      try {
+        if (imageFront) {
+          image_front_url = await uploadCardImageSide(
+            supabase,
+            user.id,
+            draftCardId,
+            'front',
+            imageFront,
+          )
+        }
+        if (imageBack) {
+          image_back_url = await uploadCardImageSide(
+            supabase,
+            user.id,
+            draftCardId,
+            'back',
+            imageBack,
+          )
+        }
+        if (image_front_url || image_back_url) {
+          const { error: imgErr } = await supabase
+            .from('cards')
+            .update({
+              ...(image_front_url != null ? { image_front_url } : {}),
+              ...(image_back_url != null ? { image_back_url } : {}),
+            })
+            .eq('id', draftCardId)
+            .eq('user_id', user.id)
+          if (imgErr) throw new Error(imgErr.message)
+        }
+      } catch (imgErr) {
+        await supabase.from('cards').delete().eq('id', draftCardId).eq('user_id', user.id)
+        throw imgErr instanceof Error ? imgErr : new Error('Image upload failed.')
+      }
+
       setToastMessage('Card added to your collection.')
-      setDialogOpen(false)
-      setEditing(null)
       await loadCards({ silent: true })
       void estimateCard(row as Card, { forceRefresh: true })
       return
-    } else if (editing) {
+    }
+
+    if (dialogMode === 'edit' && editing) {
+      let nextFront = editing.image_front_url
+      let nextBack = editing.image_back_url
+
+      if (removeImageFront) {
+        await removeCardImageByPublicUrl(supabase, editing.image_front_url)
+        nextFront = null
+      }
+      if (removeImageBack) {
+        await removeCardImageByPublicUrl(supabase, editing.image_back_url)
+        nextBack = null
+      }
+      if (imageFront) {
+        await removeCardImageByPublicUrl(supabase, editing.image_front_url)
+        nextFront = await uploadCardImageSide(supabase, user.id, editing.id, 'front', imageFront)
+      }
+      if (imageBack) {
+        await removeCardImageByPublicUrl(supabase, editing.image_back_url)
+        nextBack = await uploadCardImageSide(supabase, user.id, editing.id, 'back', imageBack)
+      }
+
+      const updates: Record<string, unknown> = {
+        ...payload,
+        last_updated: new Date().toISOString(),
+      }
+      if (removeImageFront || imageFront) updates.image_front_url = nextFront
+      if (removeImageBack || imageBack) updates.image_back_url = nextBack
+
       const { error } = await supabase
         .from('cards')
-        .update({
-          ...payload,
-          last_updated: new Date().toISOString(),
-        })
+        .update(updates)
         .eq('id', editing.id)
         .eq('user_id', user.id)
       if (error) throw new Error(error.message)
@@ -297,6 +378,13 @@ export function CollectionPage () {
     if (!user) return
     const ok = window.confirm(`Remove "${c.player_name}" from your collection?`)
     if (!ok) return
+    try {
+      await removeCardImageByPublicUrl(supabase, c.image_front_url)
+      await removeCardImageByPublicUrl(supabase, c.image_back_url)
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not remove card images from storage.')
+      return
+    }
     const { error } = await supabase.from('cards').delete().eq('id', c.id).eq('user_id', user.id)
     if (error) {
       window.alert(error.message)
@@ -424,6 +512,7 @@ export function CollectionPage () {
               onRefresh={refreshSingleCardValue}
               onEdit={openEdit}
               onDelete={handleDelete}
+              onViewImage={setImageModalCard}
             />
           ) : (
             <CollectionGridView
@@ -433,6 +522,7 @@ export function CollectionPage () {
               onRefresh={refreshSingleCardValue}
               onEdit={openEdit}
               onDelete={handleDelete}
+              onViewImage={setImageModalCard}
             />
           )}
         </>
@@ -447,6 +537,12 @@ export function CollectionPage () {
           setEditing(null)
         }}
         onSubmit={handleSubmit}
+      />
+
+      <CardImageModal
+        card={imageModalCard}
+        open={imageModalCard != null}
+        onClose={() => setImageModalCard(null)}
       />
     </div>
   )

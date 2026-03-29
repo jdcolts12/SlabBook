@@ -54,6 +54,8 @@ create table if not exists public.cards (
   grade text,
   grading_company text,
   condition text,
+  image_front_url text,
+  image_back_url text,
   purchase_price numeric(12, 2),
   purchase_date date,
   current_value numeric(12, 2),

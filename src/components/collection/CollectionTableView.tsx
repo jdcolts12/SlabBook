@@ -2,6 +2,7 @@ import type { Card } from '../../types/card'
 import { cardGainDollars, cardGainPercent, formatGradeLine } from '../../lib/cardMetrics'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { pctFormatter } from '../../lib/formatters'
+import { CardThumbnail } from './CardThumbnail'
 import { CardValueDisplay } from './CardValueDisplay'
 
 type Props = {
@@ -11,6 +12,8 @@ type Props = {
   onRefresh: (c: Card) => void
   onEdit: (c: Card) => void
   onDelete: (c: Card) => void
+  onViewImage: (c: Card) => void
+  showActions?: boolean
 }
 
 function GainCell ({ c, money }: { c: Card; money: Intl.NumberFormat }) {
@@ -63,13 +66,18 @@ export function CollectionTableView ({
   onRefresh,
   onEdit,
   onDelete,
+  onViewImage,
+  showActions = true,
 }: Props) {
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1080px] text-left text-sm">
+        <table className="w-full min-w-[1120px] text-left text-sm">
           <thead>
             <tr className="border-b border-[var(--color-border-subtle)] text-xs uppercase tracking-wider text-zinc-500">
+              <th className="w-14 px-2 py-3 font-medium lg:px-3" scope="col">
+                <span className="sr-only">Photo</span>
+              </th>
               <th className="px-3 py-3 font-medium lg:px-4">Player</th>
               <th className="px-3 py-3 font-medium lg:px-4">Year</th>
               <th className="px-3 py-3 font-medium lg:px-4">Set</th>
@@ -78,12 +86,21 @@ export function CollectionTableView ({
               <th className="px-3 py-3 text-right font-medium lg:px-4">Value</th>
               <th className="px-3 py-3 text-right font-medium lg:px-4">Gain / loss</th>
               <th className="px-3 py-3 font-medium lg:px-4">Updated</th>
-              <th className="px-3 py-3 text-right font-medium lg:px-4"> </th>
+              {showActions && (
+                <th className="px-3 py-3 text-right font-medium lg:px-4"> </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border-subtle)]">
             {cards.map((c) => (
               <tr key={c.id} className="text-zinc-200 hover:bg-white/[0.03]">
+                <td className="px-2 py-2 align-middle lg:px-3">
+                  <CardThumbnail
+                    card={c}
+                    variant="table"
+                    onClick={() => onViewImage(c)}
+                  />
+                </td>
                 <td className="px-3 py-3 font-medium text-white lg:px-4">{c.player_name}</td>
                 <td className="px-3 py-3 tabular-nums text-zinc-400 lg:px-4">{c.year ?? '—'}</td>
                 <td className="max-w-[140px] px-3 py-3 text-zinc-400 lg:max-w-[200px] lg:px-4">
@@ -107,32 +124,34 @@ export function CollectionTableView ({
                 <td className="px-3 py-3 text-xs text-zinc-500 lg:px-4">
                   {formatRelativeTime(c.last_updated)}
                 </td>
-                <td className="whitespace-nowrap px-3 py-3 text-right lg:px-4">
-                  <button
-                    type="button"
-                    onClick={() => void onRefresh(c)}
-                    disabled={Boolean(refreshingIds[c.id])}
-                    className="mr-1 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
-                    title="Refresh AI estimate"
-                    aria-label="Refresh AI estimate"
-                  >
-                    {refreshingIds[c.id] ? '…' : '↻'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onEdit(c)}
-                    className="mr-1 rounded-md px-2 py-1 text-slab-teal hover:bg-white/5 hover:text-slab-teal-light"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(c)}
-                    className="rounded-md px-2 py-1 text-zinc-500 hover:bg-red-500/10 hover:text-red-300"
-                  >
-                    Delete
-                  </button>
-                </td>
+                {showActions && (
+                  <td className="whitespace-nowrap px-3 py-3 text-right lg:px-4">
+                    <button
+                      type="button"
+                      onClick={() => void onRefresh(c)}
+                      disabled={Boolean(refreshingIds[c.id])}
+                      className="mr-1 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
+                      title="Refresh AI estimate"
+                      aria-label="Refresh AI estimate"
+                    >
+                      {refreshingIds[c.id] ? '…' : '↻'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onEdit(c)}
+                      className="mr-1 rounded-md px-2 py-1 text-slab-teal hover:bg-white/5 hover:text-slab-teal-light"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onDelete(c)}
+                      className="rounded-md px-2 py-1 text-zinc-500 hover:bg-red-500/10 hover:text-red-300"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
