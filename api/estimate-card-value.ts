@@ -41,14 +41,16 @@ type CardEstimateResult = {
   data_source: string
 }
 
-const SYSTEM_PROMPT = `You are an expert sports card pricing analyst for NFL, NBA, and MLB cards. You use web search to find recent eBay sold and listing data when estimating values. Ground your low/mid/high range in what you find; if sold comps are sparse, say so in reasoning and use wider ranges with lower confidence. Never invent specific sold prices—only ranges informed by search results or clear market tiers.`
+const SYSTEM_PROMPT = `Sports card analyst (NFL/NBA/MLB). Use web search for eBay sold/listing comps when available. Ground USD low/mid/high in findings; wider range + lower confidence if comps thin. Do not invent exact sold prices.`
 
 /** Anthropic server tool — executed by Anthropic (see web search tool docs) */
 function getWebSearchTool (): Record<string, unknown> {
+  const rawMax = process.env.PRICING_WEB_SEARCH_MAX_USES?.trim()
+  const maxUses = rawMax ? Number.parseInt(rawMax, 10) : 3
   const tool: Record<string, unknown> = {
     name: 'web_search',
-    /** Without max_uses the API may cap searches very low; comps need several queries. */
-    max_uses: 10,
+    /** Fewer searches = lower input TPM (org rate limits). Override via PRICING_WEB_SEARCH_MAX_USES. */
+    max_uses: Number.isFinite(maxUses) && maxUses > 0 ? Math.min(10, maxUses) : 3,
   }
   const ver = process.env.PRICING_WEB_SEARCH_VERSION?.trim()
   if (ver === '20260209') {
@@ -71,39 +73,30 @@ function getWebSearchTool (): Record<string, unknown> {
 const SUBMIT_CARD_ESTIMATE_TOOL = {
   name: 'submit_card_estimate',
   description:
-    'Submit the final USD value range and metadata for the sports card. Call this exactly once after you have used web_search to check eBay sold/listing data.',
+    'Submit final USD low/mid/high once. After web_search if enabled; else from card context.',
   input_schema: {
     type: 'object',
     properties: {
-      low: {
-        type: 'number',
-        description: 'Low end of fair market range in USD (not cents)',
-      },
-      mid: {
-        type: 'number',
-        description: 'Most likely current value in USD',
-      },
-      high: {
-        type: 'number',
-        description: 'High end of fair market range in USD',
-      },
+      low: { type: 'number', description: 'Low USD' },
+      mid: { type: 'number', description: 'Mid USD' },
+      high: { type: 'number', description: 'High USD' },
       confidence: {
         type: 'string',
         enum: ['high', 'medium', 'low'],
-        description: 'How confident you are in this estimate',
+        description: 'Confidence',
       },
       reasoning: {
         type: 'string',
-        description: 'One concise sentence; mention if grounded in eBay sold search results',
+        description: 'One short sentence',
       },
       trend: {
         type: 'string',
         enum: ['rising', 'stable', 'declining'],
-        description: 'Perceived near-term demand trend for this card',
+        description: 'Trend',
       },
       data_source: {
         type: 'string',
-        description: 'Always use the exact text: Claude AI estimate',
+        description: 'Use: Claude AI estimate',
       },
     },
     required: ['low', 'mid', 'high', 'confidence', 'reasoning', 'trend'],
@@ -118,23 +111,10 @@ function buildUserPrompt (card: CardEstimateInput): string {
         : 'Graded (details incomplete)')
     : 'N/A (raw)'
 
-  return `Estimate the current market value for this sports card:
-
-Player: ${card.player_name}
-Year: ${card.year ?? 'Unknown'}
-Set: ${card.set_name ?? 'Unknown'}
-Card Number: ${card.card_number ?? 'N/A'}
-Variation: ${card.variation ?? 'None'}
-Sport: ${card.sport ?? 'Unknown'}
-Graded: ${card.is_graded}
-Grade / slab: ${gradeLine}
-Condition if raw: ${card.condition ?? 'N/A'}
-
-Workflow (required):
-1. Use the web_search tool one or more times with queries aimed at eBay sold / completed listings for this player, year, set, and card (e.g. "eBay sold [player] [year] [set] [card #] graded PSA").
-2. After reviewing search results, call submit_card_estimate exactly once with low, mid, high in USD and honest confidence.
-
-If search finds no relevant sold data, still submit an estimate with wider range and lower confidence, and say so in reasoning.`
+  return `Estimate market USD value:
+Player ${card.player_name} | Yr ${card.year ?? '?'} | Set ${card.set_name ?? '?'} | #${card.card_number ?? '—'} | Var ${card.variation ?? '—'} | Sport ${card.sport ?? '?'}
+Graded ${card.is_graded} | Slab ${gradeLine} | Raw cond ${card.condition ?? '—'}
+If web_search: 1–3 tight eBay sold queries max, then submit_card_estimate once. No comps → wider range, low confidence.`
 }
 
 function extractJsonFromFencedOrSlice (raw: string): string {
@@ -448,12 +428,29 @@ async function getCardValueInner (
   const toolsWithWeb = [getWebSearchTool(), SUBMIT_CARD_ESTIMATE_TOOL]
   const toolsSubmitOnly = [SUBMIT_CARD_ESTIMATE_TOOL]
 
+  const maxOutWeb = Math.min(
+    8192,
+    Math.max(512, Number.parseInt(process.env.PRICING_MAX_OUTPUT_TOKENS_WEB?.trim() ?? '4096', 10) || 4096),
+  )
+  const maxOutFast = Math.min(
+    4096,
+    Math.max(512, Number.parseInt(process.env.PRICING_MAX_OUTPUT_TOKENS_FAST?.trim() ?? '2048', 10) || 2048),
+  )
+  const maxOutJson = Math.min(
+    4096,
+    Math.max(256, Number.parseInt(process.env.PRICING_MAX_OUTPUT_TOKENS_JSON?.trim() ?? '2048', 10) || 2048),
+  )
+
   const bodyTextOnly = {
     model,
-    max_tokens: 8192,
+    max_tokens: maxOutJson,
     temperature: 0.2,
-    system: `${SYSTEM_PROMPT} Return ONLY one JSON object, no markdown, with keys low, mid, high (numbers), confidence, reasoning, trend, data_source.`,
-    messages: [{ role: 'user', content: `${userPrompt}\n\nReturn only valid JSON.` }],
+    system: `${SYSTEM_PROMPT} Reply with one JSON object only: low, mid, high, confidence, reasoning, trend, data_source.`,
+    messages: [{ role: 'user', content: `${userPrompt}\nJSON only.` }],
+  }
+
+  function sleepMs (ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   async function callAnthropic (body: object): Promise<{ res: Response; payload: AnthropicPayload | null }> {
@@ -482,35 +479,66 @@ async function getCardValueInner (
 
     const timeoutRaw = process.env.PRICING_ANTHROPIC_TIMEOUT_MS?.trim()
     const perFetchTimeoutMs = timeoutRaw ? Number.parseInt(timeoutRaw, 10) : 0
-    const { signal: fetchSignal, dispose } = createAnthropicFetchAbort(
-      requestSignal,
-      perFetchTimeoutMs,
+    const max429 = Math.min(
+      6,
+      Math.max(0, Number.parseInt(process.env.PRICING_429_MAX_RETRIES?.trim() ?? '2', 10) || 2),
     )
 
-    const init: RequestInit = { method: 'POST', headers, body: serialized }
-    if (fetchSignal) init.signal = fetchSignal
+    let last: { res: Response; payload: AnthropicPayload | null } | undefined
 
-    let res: Response
-    try {
-      res = await fetch('https://api.anthropic.com/v1/messages', init)
-    } catch (e) {
-      dispose()
-      const aborted = e instanceof Error && e.name === 'AbortError'
-      if (aborted) {
-        const wall = requestSignal?.aborted === true
-        const msg = wall
-          ? 'Estimate aborted (function time budget). Retrying without web search, or set ESTIMATE_MAX_MS=0 / upgrade Vercel limits / enable Fluid Compute.'
-          : `Anthropic fetch aborted (timeout or signal). PRICING_ANTHROPIC_TIMEOUT_MS=${perFetchTimeoutMs || 'off'}.`
-        return {
-          res: new Response(null, { status: 504 }),
-          payload: { error: { message: msg } },
+    for (let attempt = 0; attempt <= max429; attempt++) {
+      const { signal: fetchSignal, dispose } = createAnthropicFetchAbort(
+        requestSignal,
+        perFetchTimeoutMs,
+      )
+
+      const init: RequestInit = { method: 'POST', headers, body: serialized }
+      if (fetchSignal) init.signal = fetchSignal
+
+      let res: Response
+      try {
+        res = await fetch('https://api.anthropic.com/v1/messages', init)
+      } catch (e) {
+        dispose()
+        const aborted = e instanceof Error && e.name === 'AbortError'
+        if (aborted) {
+          const wall = requestSignal?.aborted === true
+          const msg = wall
+            ? 'Estimate aborted (function time budget). Retrying without web search, or set ESTIMATE_MAX_MS=0 / upgrade Vercel limits / enable Fluid Compute.'
+            : `Anthropic fetch aborted (timeout or signal). PRICING_ANTHROPIC_TIMEOUT_MS=${perFetchTimeoutMs || 'off'}.`
+          return {
+            res: new Response(null, { status: 504 }),
+            payload: { error: { message: msg } },
+          }
         }
+        throw e
       }
-      throw e
+      dispose()
+
+      const payload = (await res.json().catch(() => null)) as AnthropicPayload | null
+      last = { res, payload }
+
+      if (res.status !== 429 || attempt >= max429) {
+        return last
+      }
+
+      const ra = res.headers.get('retry-after')
+      const fromHeader = ra ? Number.parseInt(ra, 10) : Number.NaN
+      /** Keep waits bounded so Vercel hobby (~60s) can still finish after a 429. */
+      const capMs = Math.min(
+        45_000,
+        Math.max(5000, Number.parseInt(process.env.PRICING_429_BACKOFF_CAP_MS?.trim() ?? '20000', 10) || 20_000),
+      )
+      const backoff = Number.isFinite(fromHeader)
+        ? Math.min(capMs, Math.max(2000, fromHeader * 1000))
+        : Math.min(capMs, 3000 * 2 ** attempt)
+      console.warn(
+        `[pricing-service] Anthropic 429 rate limit; waiting ${Math.round(backoff / 1000)}s then retry ${attempt + 1}/${max429}`,
+      )
+      await sleepMs(backoff)
     }
-    dispose()
-    const payload = (await res.json().catch(() => null)) as AnthropicPayload | null
-    return { res, payload }
+
+    return last!
   }
 
   async function runWithPauseTurn (base: {
@@ -564,7 +592,7 @@ async function getCardValueInner (
   if (useSubmitTool && !skipWebSearch) {
     const first = await runWithPauseTurn({
       model,
-      max_tokens: 8192,
+      max_tokens: maxOutWeb,
       temperature: 0.2,
       system: SYSTEM_PROMPT,
       tools: toolsWithWeb,
@@ -586,7 +614,7 @@ async function getCardValueInner (
       )
       const second = await runWithPauseTurn({
         model,
-        max_tokens: 8192,
+        max_tokens: maxOutWeb,
         temperature: 0.2,
         system: SYSTEM_PROMPT,
         tools: toolsSubmitOnly,
@@ -601,7 +629,7 @@ async function getCardValueInner (
   } else if (useSubmitTool && skipWebSearch) {
     const r = await runWithPauseTurn({
       model,
-      max_tokens: 4096,
+      max_tokens: maxOutFast,
       temperature: 0.2,
       system: SYSTEM_PROMPT,
       tools: toolsSubmitOnly,
@@ -691,7 +719,8 @@ function createEstimateWall (): { signal: AbortSignal; clear: () => void } | und
 function shouldRetryEstimateWithoutWebSearch (error: string): boolean {
   return (
     /504|abort|deadline|timeout|exceeded|time budget|ECONNRESET|ETIMEDOUT|fetch failed/i.test(error) ||
-    /\[(?:50[0-9]|502|503|504|529)\]/.test(error) ||
+    /\[(?:429|50[0-9]|502|503|504|529)\]/.test(error) ||
+    /rate limit|tokens per minute/i.test(error) ||
     /Could not read an estimate from Claude/i.test(error)
   )
 }
