@@ -12,7 +12,7 @@ export async function validatePromoRequest (
   opts?: { tier?: string; userId?: string | null },
 ): Promise<ValidatePromoResponse> {
   try {
-    const res = await fetch('/api/validate-promo', {
+    const res = await fetch('/api/promo/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -53,7 +53,7 @@ export async function redeemPromoRequest (
   tier?: string,
 ): Promise<{ ok?: boolean; error?: string; message?: string }> {
   try {
-    const res = await fetch('/api/redeem-promo', {
+    const res = await fetch('/api/promo/redeem', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
