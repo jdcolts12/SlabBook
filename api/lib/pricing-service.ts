@@ -403,11 +403,36 @@ async function getCardValueInner (
     const beta = process.env.ANTHROPIC_BETA?.trim()
     if (beta) headers['anthropic-beta'] = beta
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
-      body: serialized,
-    })
+    const timeoutRaw = process.env.PRICING_ANTHROPIC_TIMEOUT_MS?.trim()
+    const timeoutMs = timeoutRaw ? Number.parseInt(timeoutRaw, 10) : 0
+    const init: RequestInit = { method: 'POST', headers, body: serialized }
+    let clearTimer: (() => void) | undefined
+    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+      const ac = new AbortController()
+      const t = setTimeout(() => ac.abort(), timeoutMs)
+      clearTimer = () => clearTimeout(t)
+      init.signal = ac.signal
+    }
+
+    let res: Response
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', init)
+    } catch (e) {
+      clearTimer?.()
+      const aborted = e instanceof Error && e.name === 'AbortError'
+      if (aborted) {
+        return {
+          res: new Response(null, { status: 504 }),
+          payload: {
+            error: {
+              message: `Anthropic request exceeded PRICING_ANTHROPIC_TIMEOUT_MS (${timeoutMs}ms). Increase Vercel function max duration / enable Fluid Compute, raise the timeout, set PRICING_SKIP_WEB_SEARCH=1, or upgrade your plan.`,
+            },
+          },
+        }
+      }
+      throw e
+    }
+    clearTimer?.()
     const payload = (await res.json().catch(() => null)) as AnthropicPayload | null
     return { res, payload }
   }

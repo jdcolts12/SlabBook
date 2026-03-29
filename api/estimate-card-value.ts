@@ -2,6 +2,11 @@ import { createClient } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getCardValue, type CardEstimateInput } from './lib/pricing-service'
 
+/** Ensures Vercel applies long duration to this route (also set in vercel.json). */
+export const config = {
+  maxDuration: 300,
+}
+
 const CACHE_MS = 48 * 60 * 60 * 1000
 
 function headerString (v: string | string[] | undefined): string | undefined {
@@ -61,25 +66,17 @@ type CardRow = {
   pricing_source: string | null
 }
 
-/** Always send valid JSON; avoids empty/HTML/plain-text 500s if res.json() misbehaves. */
+/** Use Express-style .json() — matches other api/* routes and @vercel/node expectations. */
 function jsonError (res: VercelResponse, status: number, error: string) {
   const safe =
     error.length > 8000 ? `${error.slice(0, 8000)}…` : error.replace(/\u2028|\u2029/g, ' ')
   if (res.writableEnded || res.headersSent) return
-  const body = JSON.stringify({ error: safe })
-  res.statusCode = status
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  res.setHeader('Content-Length', Buffer.byteLength(body, 'utf8'))
-  res.end(body)
+  res.status(status).json({ error: safe })
 }
 
 function jsonOk (res: VercelResponse, status: number, body: Record<string, unknown>) {
   if (res.writableEnded || res.headersSent) return
-  const raw = JSON.stringify(body)
-  res.statusCode = status
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  res.setHeader('Content-Length', Buffer.byteLength(raw, 'utf8'))
-  res.end(raw)
+  res.status(status).json(body)
 }
 
 export default async function handler (req: VercelRequest, res: VercelResponse) {
