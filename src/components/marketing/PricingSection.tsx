@@ -29,7 +29,13 @@ const TIERS: {
     name: 'Free',
     price: 0,
     period: 'mo',
-    features: ['Track up to 15 cards', 'Basic portfolio dashboard', 'Manual value updates'],
+    features: [
+      'Track up to 15 cards',
+      'Card photos & AI auto-identify',
+      'Binder grid or table view',
+      'Basic portfolio dashboard',
+      'Manual value updates',
+    ],
     cta: 'Sign Up Free',
   },
   {
@@ -40,6 +46,7 @@ const TIERS: {
     highlight: true,
     features: [
       'Track up to 500 cards',
+      'Card photos & AI auto-identify',
       'Live eBay price tracking',
       'Price alerts',
       'Weekly AI insights',
@@ -53,6 +60,7 @@ const TIERS: {
     period: 'mo',
     features: [
       'Unlimited cards',
+      'Card photos & AI auto-identify',
       'Daily AI insights',
       'Trade analyzer',
       'Tax export (cost basis report)',

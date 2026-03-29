@@ -13,7 +13,15 @@ const FAQ = [
   },
   {
     q: 'What sports and cards are supported?',
-    a: 'NFL, NBA, and MLB cards. Raw and graded (PSA, BGS, SGC, CGC).',
+    a: 'NFL, NBA, MLB, and NHL cards. Raw and graded (PSA, BGS, SGC, CGC).',
+  },
+  {
+    q: 'Can I add photos of my cards?',
+    a: 'Yes. Upload front and back images (or use your phone camera), optional on every card. Your binder and tables show real thumbnails; tap to view full size.',
+  },
+  {
+    q: 'What is auto-identify?',
+    a: 'Point Claude at a front photo and it reads the card — player, year, set, number, grade, sport — so you spend less time typing. You always review before saving.',
   },
   {
     q: 'How does the AI know about my collection?',
@@ -37,7 +45,7 @@ export function LandingPage () {
   const [selectedTier, setSelectedTier] = useState<TierId>('collector')
 
   useEffect(() => {
-    document.title = 'SlabBook — Your card collection, tracked & valued'
+    document.title = 'SlabBook — Photos, AI identify & live card values'
   }, [])
 
   useEffect(() => {
@@ -68,8 +76,9 @@ export function LandingPage () {
                 Your Card Collection. Tracked. Valued. Intelligent.
               </h1>
               <p className="mt-5 text-lg leading-relaxed text-[var(--slab-text-muted)]">
-                SlabBook uses AI to track your sports card portfolio, monitor real eBay market prices, and surface
-                insights that help you buy and sell smarter.
+                Track your slabs with photos, a binder-style grid or sortable table, and AI that estimates value from
+                live eBay comps. Snap a card — optional auto-identify fills the details — then get portfolio insights
+                that help you buy and sell smarter.
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link
@@ -91,30 +100,36 @@ export function LandingPage () {
             <div className="relative rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 shadow-2xl shadow-black/50">
               <div className="mb-3 flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slab-teal-light">Featured Slabs</p>
-                  <p className="text-[11px] text-[var(--slab-text-muted)]">Live values + AI notes</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slab-teal-light">Collection</p>
+                  <p className="text-[11px] text-[var(--slab-text-muted)]">Photos · grid or table · live values</p>
                 </div>
                 <div className="rounded-full bg-slab-teal/15 px-2 py-1 text-[10px] font-medium text-slab-teal-light">+$1,248</div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { name: 'Michael Jordan', set: '1986 Fleer', grade: 'PSA 9', value: '$18,500' },
-                  { name: 'Tom Brady', set: '2000 Bowman', grade: 'BGS 9', value: '$6,200' },
-                  { name: 'Shohei Ohtani', set: '2018 Topps', grade: 'PSA 10', value: '$3,950' },
+                  { name: 'Michael Jordan', set: '1986 Fleer', grade: 'PSA 9', value: '$18,500', sport: '🏀' },
+                  { name: 'Tom Brady', set: '2000 Bowman', grade: 'BGS 9', value: '$6,200', sport: '🏈' },
+                  { name: 'Shohei Ohtani', set: '2018 Topps', grade: 'PSA 10', value: '$3,950', sport: '⚾' },
                 ].map((card) => (
                   <div
                     key={card.name}
                     className="rounded-xl border border-slab-teal/30 bg-[linear-gradient(180deg,#1A1F27_0%,#101318_100%)] p-2.5 shadow-lg shadow-black/30"
                   >
-                    <div className="rounded-md border border-zinc-700/70 bg-zinc-900/80 p-1.5 text-[10px] text-zinc-200">
-                      <p className="truncate font-semibold">{card.name}</p>
-                      <p className="truncate text-zinc-400">{card.set}</p>
+                    <div className="relative aspect-[5/7] max-h-[72px] overflow-hidden rounded-md border border-zinc-700/70 bg-gradient-to-br from-zinc-800 to-zinc-950">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+                        <span className="text-lg opacity-80" aria-hidden>
+                          {card.sport}
+                        </span>
+                        <span className="text-[8px] font-bold uppercase tracking-tight text-zinc-400">Photo</span>
+                      </div>
                     </div>
-                    <div className="mt-2 rounded-md bg-slab-teal/15 px-1.5 py-1 text-[10px] text-slab-teal-light">
+                    <p className="mt-2 truncate text-[10px] font-semibold text-zinc-100">{card.name}</p>
+                    <p className="truncate text-[9px] text-zinc-500">{card.set}</p>
+                    <div className="mt-1.5 rounded-md bg-slab-teal/15 px-1.5 py-0.5 text-[9px] text-slab-teal-light">
                       {card.grade}
                     </div>
-                    <p className="mt-1.5 text-[11px] font-semibold text-white">{card.value}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-white">{card.value}</p>
                   </div>
                 ))}
               </div>
@@ -132,14 +147,16 @@ export function LandingPage () {
         {/* Social proof */}
         <section className="border-y border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/50 px-6 py-8 sm:px-10">
           <p className="text-center text-sm font-medium text-[var(--slab-text-muted)]">
-            Tracking cards across NFL • NBA • MLB collections
+            NFL · NBA · MLB · NHL — photos, binder grid, and AI in one place
           </p>
-          <div className="mx-auto mt-6 flex max-w-3xl flex-wrap justify-center gap-8 text-center text-sm text-[var(--slab-text)]">
-            <span>500+ Cards Tracked</span>
-            <span className="text-[var(--slab-border)]">|</span>
-            <span>Live eBay Pricing</span>
-            <span className="text-[var(--slab-border)]">|</span>
-            <span>AI-Powered Insights</span>
+          <div className="mx-auto mt-6 flex max-w-4xl flex-wrap justify-center gap-x-6 gap-y-3 text-center text-sm text-[var(--slab-text)] sm:gap-x-8">
+            <span>Card photos</span>
+            <span className="hidden text-[var(--slab-border)] sm:inline">|</span>
+            <span>Auto-identify</span>
+            <span className="hidden text-[var(--slab-border)] sm:inline">|</span>
+            <span>Live eBay comps</span>
+            <span className="hidden text-[var(--slab-border)] sm:inline">|</span>
+            <span>AI insights</span>
           </div>
         </section>
 
@@ -183,8 +200,9 @@ export function LandingPage () {
           <h2 className="text-center text-3xl font-semibold tracking-tight text-[var(--slab-text)]">How it works</h2>
           <ol className="mx-auto mt-12 grid max-w-3xl gap-8">
             {[
-              'Add your cards (player, set, grade, what you paid)',
-              'SlabBook pulls live eBay sold comps automatically',
+              'Add cards with photos — or use auto-identify from a front picture to pre-fill details',
+              'Organize in grid or table; optional back photos and full-size viewer',
+              'SlabBook refreshes values using live eBay sold comps',
               'AI analyzes your portfolio and surfaces insights',
               'Make smarter buy and sell decisions',
             ].map((step, i) => (
