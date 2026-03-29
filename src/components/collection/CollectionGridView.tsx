@@ -39,9 +39,9 @@ export function CollectionGridView ({
         return (
           <article
             key={c.id}
-            className="flex min-h-[320px] flex-col overflow-hidden rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] transition hover:border-zinc-600/80"
+            className="flex flex-col rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] transition hover:border-zinc-600/80"
           >
-            <div className="relative min-h-0 flex-[3] basis-0">
+            <div className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-t-xl">
               <CardThumbnail
                 card={c}
                 variant="fill"
@@ -49,7 +49,7 @@ export function CollectionGridView ({
                 onClick={() => onViewImage(c)}
               />
             </div>
-            <div className="flex min-h-0 flex-[2] basis-0 flex-col p-4">
+            <div className="flex flex-col p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h3 className="truncate text-lg font-semibold text-white">{c.player_name}</h3>
@@ -71,10 +71,10 @@ export function CollectionGridView ({
               <p className="mt-2 truncate text-xs font-medium uppercase tracking-wide text-zinc-400">
                 {formatGradeLine(c)}
               </p>
-              <div className="mt-3 min-w-0 flex-1">
+              <div className="mt-3 min-w-0">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Est. value</p>
                 <div className="mt-1 text-2xl font-bold tabular-nums leading-tight text-white">
-                  <CardValueDisplay card={c} money={money} align="left" />
+                  <CardValueDisplay card={c} money={money} align="left" showDisclaimer={false} />
                 </div>
               </div>
               <div className="mt-3 border-t border-[var(--color-border-subtle)] pt-3">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { CardImageModal } from '../components/collection/CardImageModal'
 import { CollectionGridView } from '../components/collection/CollectionGridView'
 import { CollectionTableView } from '../components/collection/CollectionTableView'
@@ -12,6 +12,7 @@ import { getCardValue } from '../lib/pricing-service'
 import { computePortfolioMetrics } from '../lib/cardMetrics'
 import { moneyFormatter, pctFormatter } from '../lib/formatters'
 import { isEstimateStale } from '../lib/pricingConstants'
+import { removeCardImageByPublicUrl } from '../lib/cardImageStorage'
 import { sleep } from '../lib/sleep'
 import { supabase } from '../lib/supabase'
 import type { Card } from '../types/card'
@@ -31,9 +32,11 @@ function readDashboardView (): ViewMode {
 
 export function DashboardHomePage () {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [refreshingIds, setRefreshingIds] = useState<Record<string, boolean>>({})
   const [refreshingValues, setRefreshingValues] = useState(false)
   const [estimateProgress, setEstimateProgress] = useState<{ current: number; total: number } | null>(null)
   const [estimateDone, setEstimateDone] = useState<string | null>(null)
@@ -108,6 +111,55 @@ export function DashboardHomePage () {
   useEffect(() => {
     document.title = 'Dashboard — SlabBook'
   }, [])
+
+  async function refreshSingleCardValue (card: Card) {
+    setError(null)
+    setRefreshingIds((prev) => ({ ...prev, [card.id]: true }))
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Missing auth session. Please sign in again.')
+      }
+      const est = await getCardValue(card, session.access_token, { force_refresh: true })
+      if (est.error) {
+        throw new Error(est.error)
+      }
+      setCards((prev) => prev.map((c) => (c.id === card.id ? mergeEstimateIntoCard(c, est) : c)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to refresh value.')
+    } finally {
+      setRefreshingIds((prev) => {
+        const next = { ...prev }
+        delete next[card.id]
+        return next
+      })
+    }
+  }
+
+  function openEditOnCollection (c: Card) {
+    navigate('/dashboard/collection', { state: { editCardId: c.id } })
+  }
+
+  async function handleDelete (c: Card) {
+    if (!user) return
+    const ok = window.confirm(`Remove "${c.player_name}" from your collection?`)
+    if (!ok) return
+    try {
+      await removeCardImageByPublicUrl(supabase, c.image_front_url)
+      await removeCardImageByPublicUrl(supabase, c.image_back_url)
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not remove card images from storage.')
+      return
+    }
+    const { error: delErr } = await supabase.from('cards').delete().eq('id', c.id).eq('user_id', user.id)
+    if (delErr) {
+      window.alert(delErr.message)
+      return
+    }
+    await loadCards({ silent: true })
+  }
 
   async function estimateAllValues () {
     if (!user || cards.length === 0) return
@@ -229,7 +281,7 @@ export function DashboardHomePage () {
                 </button>
               </div>
               <Link
-                to="/collection"
+                to="/dashboard/collection"
                 className="text-sm font-medium text-slab-teal hover:text-slab-teal-light"
               >
                 Open full collection →
@@ -241,23 +293,21 @@ export function DashboardHomePage () {
             <CollectionTableView
               cards={recentCards}
               money={money}
-              refreshingIds={{}}
-              onRefresh={() => undefined}
-              onEdit={() => undefined}
-              onDelete={() => undefined}
+              refreshingIds={refreshingIds}
+              onRefresh={(c) => void refreshSingleCardValue(c)}
+              onEdit={openEditOnCollection}
+              onDelete={(c) => void handleDelete(c)}
               onViewImage={setImageModalCard}
-              showActions={false}
             />
           ) : (
             <CollectionGridView
               cards={recentCards}
               money={money}
-              refreshingIds={{}}
-              onRefresh={() => undefined}
-              onEdit={() => undefined}
-              onDelete={() => undefined}
+              refreshingIds={refreshingIds}
+              onRefresh={(c) => void refreshSingleCardValue(c)}
+              onEdit={openEditOnCollection}
+              onDelete={(c) => void handleDelete(c)}
               onViewImage={setImageModalCard}
-              showActions={false}
             />
           )}
         </section>

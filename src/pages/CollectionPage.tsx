@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { CardFormDialog, type CardFormSubmitPayload } from '../components/collection/CardFormDialog'
 import { CardImageModal } from '../components/collection/CardImageModal'
 import { CollectionGridView } from '../components/collection/CollectionGridView'
@@ -104,6 +105,8 @@ function filterCards (
 }
 
 export function CollectionPage () {
+  const location = useLocation()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
@@ -166,6 +169,22 @@ export function CollectionPage () {
   useEffect(() => {
     void loadCards()
   }, [loadCards])
+
+  useEffect(() => {
+    const raw = location.state as Record<string, unknown> | null
+    const editId = raw && typeof raw.editCardId === 'string' ? raw.editCardId : null
+    if (!editId) return
+    if (loading) return
+    const card = cards.find((c) => c.id === editId)
+    if (!card) {
+      navigate(location.pathname, { replace: true, state: null })
+      return
+    }
+    setDialogMode('edit')
+    setEditing(card)
+    setDialogOpen(true)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location.state, location.pathname, cards, navigate, loading])
 
   useEffect(() => {
     if (!user) return

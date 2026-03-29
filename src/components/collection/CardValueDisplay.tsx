@@ -7,6 +7,8 @@ type Props = {
   money: Intl.NumberFormat
   align?: 'left' | 'right'
   compactDisclaimer?: boolean
+  /** When false, omit the long AI disclaimer (e.g. grid cards; banner already on page). */
+  showDisclaimer?: boolean
 }
 
 function ConfidenceBadge ({ confidence }: { confidence: string | null }) {
@@ -46,7 +48,13 @@ function TrendMark ({ trend }: { trend: string | null }) {
   return null
 }
 
-export function CardValueDisplay ({ card, money, align = 'left', compactDisclaimer = false }: Props) {
+export function CardValueDisplay ({
+  card,
+  money,
+  align = 'left',
+  compactDisclaimer = false,
+  showDisclaimer = true,
+}: Props) {
   const mid = card.current_value != null ? Number(card.current_value) : null
   const low = card.value_low != null ? Number(card.value_low) : null
   const high = card.value_high != null ? Number(card.value_high) : null
@@ -94,9 +102,17 @@ export function CardValueDisplay ({ card, money, align = 'left', compactDisclaim
       {(card.pricing_source === 'claude_estimate' || card.confidence) && (
         <p className="mt-0.5 text-[9px] text-zinc-600">Powered by Claude AI</p>
       )}
-      <p className={compactDisclaimer ? 'mt-1 line-clamp-2 text-[9px] leading-snug text-zinc-600' : 'mt-1 text-[9px] leading-snug text-zinc-600'}>
-        {AI_VALUE_DISCLAIMER}
-      </p>
+      {showDisclaimer && (
+        <p
+          className={
+            compactDisclaimer
+              ? 'mt-1 line-clamp-2 text-[9px] leading-snug text-zinc-600'
+              : 'mt-1 text-[9px] leading-snug text-zinc-600'
+          }
+        >
+          {AI_VALUE_DISCLAIMER}
+        </p>
+      )}
     </div>
   )
 }
