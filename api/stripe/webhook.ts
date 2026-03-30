@@ -1,8 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import getRawBody from 'raw-body'
-import { createSupabaseAdmin } from '../../server/supabaseAdmin'
-import { redeemPromoAfterCheckout } from '../../server/promoRedeemFromStripe'
-import { sendWelcomeEmail } from '../../server/sendWelcomeEmail'
 
 export const config = {
   api: {
@@ -41,7 +37,7 @@ function mapStripeSubStatus (s: StripeSubStatus): string {
 }
 
 async function userIdForCustomer (
-  admin: NonNullable<ReturnType<typeof createSupabaseAdmin>>,
+  admin: any,
   customerId: string,
 ): Promise<string | null> {
   const { data } = await admin
@@ -71,6 +67,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
 
   let rawBody: Buffer
   try {
+    const { default: getRawBody } = await import('raw-body')
     rawBody = await getRawBody(req as NodeJS.ReadableStream, {
       length: req.headers['content-length'],
       limit: '2mb',
@@ -80,6 +77,11 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
   }
 
   const { default: Stripe } = await import('stripe')
+  const [{ createSupabaseAdmin }, { redeemPromoAfterCheckout }, { sendWelcomeEmail }] = await Promise.all([
+    import('../../server/supabaseAdmin'),
+    import('../../server/promoRedeemFromStripe'),
+    import('../../server/sendWelcomeEmail'),
+  ])
   const stripe = new Stripe(secret)
   let event: StripeEvent
   try {
