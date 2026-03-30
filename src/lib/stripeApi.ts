@@ -1,3 +1,15 @@
+function errorFromStripeBody (status: number, text: string): string {
+  try {
+    const j = JSON.parse(text) as { error?: string }
+    if (typeof j.error === 'string' && j.error.trim()) return j.error
+  } catch {
+    /* not JSON */
+  }
+  const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 280)
+  if (snippet) return `HTTP ${status}: ${snippet}`
+  return `HTTP ${status} (empty body)`
+}
+
 export async function createCheckoutSession (
   accessToken: string,
   tier: 'pro' | 'founding',
@@ -15,9 +27,16 @@ export async function createCheckoutSession (
       user_id: '',
     }),
   })
-  const data = (await res.json().catch(() => ({}))) as { error?: string; url?: string }
+  const text = await res.text()
+  let data: { error?: string; url?: string } = {}
+  try {
+    data = JSON.parse(text) as { error?: string; url?: string }
+  } catch {
+    if (!res.ok) throw new Error(errorFromStripeBody(res.status, text))
+    throw new Error('Checkout returned invalid JSON.')
+  }
   if (!res.ok) {
-    throw new Error(data.error ?? 'Unable to start checkout.')
+    throw new Error(data.error ?? errorFromStripeBody(res.status, text))
   }
   if (!data.url) {
     throw new Error('Checkout did not return a URL.')
@@ -34,9 +53,16 @@ export async function createPortalSession (accessToken: string): Promise<string>
     },
     body: JSON.stringify({ user_id: '' }),
   })
-  const data = (await res.json().catch(() => ({}))) as { error?: string; url?: string }
+  const text = await res.text()
+  let data: { error?: string; url?: string } = {}
+  try {
+    data = JSON.parse(text) as { error?: string; url?: string }
+  } catch {
+    if (!res.ok) throw new Error(errorFromStripeBody(res.status, text))
+    throw new Error('Portal returned invalid JSON.')
+  }
   if (!res.ok) {
-    throw new Error(data.error ?? 'Unable to open billing portal.')
+    throw new Error(data.error ?? errorFromStripeBody(res.status, text))
   }
   if (!data.url) {
     throw new Error('Portal did not return a URL.')
@@ -65,9 +91,16 @@ export async function listStripeInvoices (accessToken: string): Promise<StripeIn
     },
     body: JSON.stringify({ user_id: '' }),
   })
-  const data = (await res.json().catch(() => ({}))) as { error?: string; invoices?: StripeInvoiceRow[] }
+  const text = await res.text()
+  let data: { error?: string; invoices?: StripeInvoiceRow[] } = {}
+  try {
+    data = JSON.parse(text) as { error?: string; invoices?: StripeInvoiceRow[] }
+  } catch {
+    if (!res.ok) throw new Error(errorFromStripeBody(res.status, text))
+    throw new Error('Invoices returned invalid JSON.')
+  }
   if (!res.ok) {
-    throw new Error(data.error ?? 'Unable to load invoices.')
+    throw new Error(data.error ?? errorFromStripeBody(res.status, text))
   }
   return data.invoices ?? []
 }
