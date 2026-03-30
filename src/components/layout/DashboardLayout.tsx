@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useAuth } from '../../hooks/useAuth'
 import { redeemPromoRequest } from '../../lib/promoApi'
 import { supabase } from '../../lib/supabase'
+import { effectiveTier, planDisplayLabel, type UserPlanFields } from '../../lib/tierLimits'
 import { SlabBookLogo } from '../SlabBookLogo'
 import { PromoCodeInput } from '../promo/PromoCodeInput'
 
@@ -65,7 +66,7 @@ export function DashboardLayout () {
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null)
+  const [membershipRow, setMembershipRow] = useState<UserPlanFields | null>(null)
   const [promoCodeUsed, setPromoCodeUsed] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null)
@@ -77,14 +78,15 @@ export function DashboardLayout () {
   const loadMembership = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from('users')
-      .select('subscription_tier, promo_code_used, trial_ends_at, subscription_ends_at')
+      .select(
+        'subscription_tier, subscription_status, lifetime_access, promo_code_used, trial_ends_at, subscription_ends_at',
+      )
       .eq('id', userId)
       .maybeSingle()
-    const tier = typeof data?.subscription_tier === 'string' ? data.subscription_tier : null
     const promo = typeof data?.promo_code_used === 'string' ? data.promo_code_used : null
     const trial = typeof data?.trial_ends_at === 'string' ? data.trial_ends_at : null
     const subEnd = typeof data?.subscription_ends_at === 'string' ? data.subscription_ends_at : null
-    setSubscriptionTier(tier)
+    setMembershipRow((data as UserPlanFields | null) ?? null)
     setPromoCodeUsed(promo)
     setTrialEndsAt(trial)
     setSubscriptionEndsAt(subEnd)
@@ -93,7 +95,7 @@ export function DashboardLayout () {
   useEffect(() => {
     if (!user) {
       const clear = window.setTimeout(() => {
-        setSubscriptionTier(null)
+        setMembershipRow(null)
         setPromoCodeUsed(null)
         setTrialEndsAt(null)
         setSubscriptionEndsAt(null)
@@ -141,7 +143,12 @@ export function DashboardLayout () {
     const params = new URLSearchParams(location.search)
     const promo = params.get('promo')?.trim().toUpperCase() ?? ''
     const tier = params.get('tier')?.trim().toLowerCase()
-    const mappedTier = tier === 'investor' ? 'lifetime' : tier === 'collector' ? 'collector' : 'free'
+    const mappedTier =
+      tier === 'investor' || tier === 'founding'
+        ? 'lifetime'
+        : tier === 'pro' || tier === 'collector'
+          ? 'pro'
+          : 'free'
     const timer = window.setTimeout(() => {
       if (promo) setPromoCode(promo)
       setPromoTier(mappedTier)
@@ -223,12 +230,20 @@ export function DashboardLayout () {
       </nav>
       <div id="promo-upgrade" className="border-t border-[var(--color-border-subtle)] p-4">
         <p className="truncate text-xs text-zinc-500">{user?.email}</p>
-        {subscriptionTier && (
+        {membershipRow && (
           <p className="mt-2">
             <span className="inline-flex items-center rounded-full border border-slab-teal/40 bg-slab-teal/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slab-teal-light">
-              Plan: {subscriptionTier}
+              Plan: {planDisplayLabel(membershipRow)}
             </span>
           </p>
+        )}
+        {membershipRow && effectiveTier(membershipRow) === 'free' && (
+          <Link
+            to="/pricing"
+            className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-slab-teal px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
+          >
+            Upgrade to Pro
+          </Link>
         )}
         <p className="mt-1 text-[11px] text-zinc-400">
           Promo: {promoCodeUsed ?? 'None'}
@@ -258,8 +273,8 @@ export function DashboardLayout () {
               className="mt-2 h-9 w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-2 text-xs text-[var(--slab-text)] focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20"
             >
               <option value="free">Free</option>
-              <option value="collector">Collector</option>
-              <option value="lifetime">Investor / Lifetime</option>
+              <option value="pro">Pro</option>
+              <option value="lifetime">Lifetime / Founding</option>
             </select>
             <button
               type="button"

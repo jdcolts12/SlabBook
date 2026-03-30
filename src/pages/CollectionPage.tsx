@@ -30,7 +30,7 @@ import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
 import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
 import { getCardValue } from '../lib/pricing-service'
 import { createCheckoutSession } from '../lib/stripeApi'
-import { effectiveTier, maxCardsForUser } from '../lib/tierLimits'
+import { maxCardsForUser } from '../lib/tierLimits'
 import type { Card } from '../types/card'
 
 const money = moneyFormatter
@@ -567,21 +567,16 @@ export function CollectionPage () {
       <UpgradeModal
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
-        title={effectiveTier(profile) === 'collector' ? 'Upgrade to Investor' : 'Upgrade to Collector'}
-        body={
-          effectiveTier(profile) === 'collector'
-            ? "You've reached the 500 card limit on the Collector plan. Upgrade to Investor for unlimited cards, daily AI insights, and tax export."
-            : "You've reached the 15 card limit on the free plan. Upgrade to track up to 500 cards, get AI insights, and live price estimates."
-        }
-        ctaLabel={effectiveTier(profile) === 'collector' ? 'Get Investor' : 'Get Collector'}
+        title="Upgrade to Pro"
+        body="You've reached the 15 card limit on the free plan. Pro includes unlimited cards, full AI (identify, pricing, daily insights), alerts, market values, trade tools, and tax export."
+        ctaLabel="Get Pro"
         ctaLoading={upgradeLoading}
         onCta={() => {
           if (!session?.access_token) return
           setUpgradeLoading(true)
           void (async () => {
             try {
-              const tier = effectiveTier(profile) === 'collector' ? 'investor' : 'collector'
-              const url = await createCheckoutSession(session.access_token, tier, '')
+              const url = await createCheckoutSession(session.access_token, 'pro', '')
               window.location.href = url
             } catch (e) {
               window.alert(e instanceof Error ? e.message : 'Checkout failed.')

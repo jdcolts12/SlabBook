@@ -25,8 +25,13 @@ function appOrigin (): string {
 
 function priceIdForTier (tier: string): string | null {
   const t = tier.toLowerCase()
-  if (t === 'collector') return process.env.STRIPE_PRICE_COLLECTOR?.trim() ?? null
-  if (t === 'investor') return process.env.STRIPE_PRICE_INVESTOR?.trim() ?? null
+  if (t === 'pro' || t === 'collector' || t === 'investor') {
+    return (
+      process.env.STRIPE_PRICE_PRO?.trim() ??
+      process.env.STRIPE_PRICE_COLLECTOR?.trim() ??
+      null
+    )
+  }
   if (t === 'founding') return process.env.STRIPE_PRICE_FOUNDING?.trim() ?? null
   return null
 }
@@ -77,7 +82,7 @@ export async function handleStripeCheckout (req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: 'User mismatch.' })
     }
 
-    if (!['collector', 'investor', 'founding'].includes(tierRaw)) {
+    if (!['pro', 'collector', 'investor', 'founding'].includes(tierRaw)) {
       return res.status(400).json({ error: 'Invalid tier.' })
     }
 
@@ -86,10 +91,12 @@ export async function handleStripeCheckout (req: ApiRequest, res: ApiResponse) {
       return res.status(500).json({ error: `Missing Stripe price env for tier: ${tierRaw}` })
     }
 
+    const promoTierKey = tierRaw === 'founding' ? 'lifetime' : 'pro'
+
     let promoNormalized = ''
     if (promoRaw.trim()) {
       const v = await validatePromoCode(admin, promoRaw, {
-        tier: tierRaw === 'founding' ? 'lifetime' : tierRaw,
+        tier: promoTierKey,
         userId: user.id,
       })
       if (!v.valid) {

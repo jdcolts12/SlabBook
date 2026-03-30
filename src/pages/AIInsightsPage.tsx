@@ -199,8 +199,8 @@ export function AIInsightsPage () {
       <div className="mx-auto max-w-lg space-y-6 px-4 py-16 text-center">
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">AI Insights</h1>
         <p className="text-sm leading-relaxed text-zinc-400">
-          Weekly and daily AI portfolio analysis is included with Collector and Investor plans. Get Collector to
-          unlock personalized sell opportunities, risks, and actions based on your slabs.
+          Daily AI portfolio analysis is included with Pro. Get Pro to unlock personalized sell opportunities,
+          risks, and actions based on your slabs.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
@@ -217,7 +217,7 @@ export function AIInsightsPage () {
               setGateCheckout(true)
               void (async () => {
                 try {
-                  const url = await createCheckoutSession(session.access_token, 'collector', '')
+                  const url = await createCheckoutSession(session.access_token, 'pro', '')
                   window.location.href = url
                 } catch (e) {
                   window.alert(e instanceof Error ? e.message : 'Checkout failed.')
@@ -228,7 +228,7 @@ export function AIInsightsPage () {
             }}
             className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-slab-teal px-5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
           >
-            {gateCheckout ? 'Redirecting…' : 'Get Collector'}
+            {gateCheckout ? 'Redirecting…' : 'Get Pro'}
           </button>
         </div>
       </div>

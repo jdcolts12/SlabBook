@@ -10,7 +10,7 @@ export function PricingPage () {
   const { user, session } = useAuth()
   const { profile } = useUserProfile(user?.id)
   const [promoCode, setPromoCode] = useState('')
-  const [selectedTier, setSelectedTier] = useState<TierId>('collector')
+  const [selectedTier, setSelectedTier] = useState<TierId>('pro')
 
   useEffect(() => {
     document.title = 'Pricing — SlabBook'

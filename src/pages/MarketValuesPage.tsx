@@ -468,8 +468,8 @@ export function MarketValuesPage () {
       <div className="mx-auto max-w-lg space-y-6 px-4 py-16 text-center">
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Market Values</h1>
         <p className="text-sm leading-relaxed text-zinc-400">
-          Live market value tracking and the Market Values dashboard are included with Collector and Investor plans.
-          Get Collector to see comps, trends, and bulk estimates across your collection.
+          Live market value tracking and the Market Values dashboard are included with Pro. Get Pro to see comps,
+          trends, and bulk estimates across your collection.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
@@ -486,7 +486,7 @@ export function MarketValuesPage () {
               setGateCheckout(true)
               void (async () => {
                 try {
-                  const url = await createCheckoutSession(session.access_token, 'collector', '')
+                  const url = await createCheckoutSession(session.access_token, 'pro', '')
                   window.location.href = url
                 } catch (e) {
                   window.alert(e instanceof Error ? e.message : 'Checkout failed.')
@@ -497,7 +497,7 @@ export function MarketValuesPage () {
             }}
             className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-slab-teal px-5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
           >
-            {gateCheckout ? 'Redirecting…' : 'Get Collector'}
+            {gateCheckout ? 'Redirecting…' : 'Get Pro'}
           </button>
         </div>
       </div>

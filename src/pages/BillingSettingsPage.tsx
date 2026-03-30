@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { createCheckoutSession, createPortalSession, listStripeInvoices, type StripeInvoiceRow } from '../lib/stripeApi'
-import { effectiveTier, type UserPlanFields } from '../lib/tierLimits'
+import { effectiveTier, planDisplayLabel, type UserPlanFields } from '../lib/tierLimits'
 import { moneyFormatter } from '../lib/formatters'
 
 function formatPeriodEnd (iso: string | null | undefined): string {
@@ -70,7 +70,7 @@ export function BillingSettingsPage () {
     setActionError(null)
     setCheckoutLoading(true)
     try {
-      const url = await createCheckoutSession(session.access_token, 'collector', '')
+      const url = await createCheckoutSession(session.access_token, 'pro', '')
       window.location.href = url
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Checkout failed.')
@@ -106,14 +106,14 @@ export function BillingSettingsPage () {
             <h2 className="text-lg font-semibold text-white">Current plan</h2>
             {lifetime && (
               <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                Lifetime
+                {profile?.lifetime_access ? 'Founding Member' : 'Lifetime'}
               </span>
             )}
           </div>
           <dl className="grid gap-3 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-zinc-500">Plan</dt>
-              <dd className="font-medium capitalize text-white">{tier}</dd>
+              <dd className="font-medium text-white">{planDisplayLabel(profile as UserPlanFields | null)}</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-zinc-500">Status</dt>
@@ -141,7 +141,7 @@ export function BillingSettingsPage () {
                 disabled={checkoutLoading}
                 className="inline-flex items-center justify-center rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
               >
-                {checkoutLoading ? 'Redirecting…' : 'Get Collector'}
+                {checkoutLoading ? 'Redirecting…' : 'Get Pro'}
               </button>
             )}
             {profile?.stripe_customer_id && !lifetime && (

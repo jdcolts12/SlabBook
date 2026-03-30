@@ -225,8 +225,7 @@ export function AdminPage () {
               className="rounded border border-zinc-700 bg-[var(--color-surface)] px-2 py-2 text-sm"
             >
               <option value="any">any</option>
-              <option value="collector">collector</option>
-              <option value="investor">investor</option>
+              <option value="pro">pro</option>
               <option value="lifetime">lifetime</option>
             </select>
             <input

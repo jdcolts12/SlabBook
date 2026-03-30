@@ -1,6 +1,6 @@
 export async function createCheckoutSession (
   accessToken: string,
-  tier: 'collector' | 'investor' | 'founding',
+  tier: 'pro' | 'founding',
   promoCode?: string,
 ): Promise<string> {
   const res = await fetch('/api/stripe/create-checkout-session', {

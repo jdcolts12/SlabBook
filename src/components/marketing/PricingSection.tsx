@@ -5,7 +5,7 @@ import { validatePromoRequest, type ValidatePromoResponse } from '../../lib/prom
 import { createCheckoutSession } from '../../lib/stripeApi'
 import { type EffectiveTier } from '../../lib/tierLimits'
 
-export type TierId = 'free' | 'collector' | 'investor'
+export type TierId = 'free' | 'pro'
 
 type Props = {
   selectedTier: TierId
@@ -36,42 +36,31 @@ const TIERS: {
     price: 0,
     period: 'mo',
     features: [
-      'Track up to 15 cards',
-      'Card photos & AI auto-identify',
-      'Binder grid or table view',
+      'Up to 15 cards',
       'Basic portfolio dashboard',
       'Manual value updates',
+      'Upgrade prompts when you hit limits',
     ],
     cta: 'Sign Up Free',
   },
   {
-    id: 'collector',
-    name: 'Collector',
+    id: 'pro',
+    name: 'Pro',
     price: 5,
     period: 'mo',
     highlight: true,
     features: [
-      'Track up to 500 cards',
-      'Card photos & AI auto-identify',
-      'Live eBay price tracking',
-      'Price alerts',
-      'Weekly AI insights',
-    ],
-    cta: 'Get Collector',
-  },
-  {
-    id: 'investor',
-    name: 'Investor',
-    price: 12,
-    period: 'mo',
-    features: [
       'Unlimited cards',
-      'Card photos & AI auto-identify',
-      'Daily AI insights',
+      'AI photo identification',
+      'AI price estimates (incl. web search)',
+      'Daily AI portfolio insights',
+      'Price alerts',
+      'Market values tab',
       'Trade analyzer',
-      'Tax export (cost basis report)',
+      'Tax export',
+      'Community feed (coming soon)',
     ],
-    cta: 'Get Investor',
+    cta: 'Get Pro',
   },
 ]
 
@@ -98,14 +87,26 @@ function displayPrice (
   return { display: base }
 }
 
+/** Promo validation tier key (matches server `normalizePromoTierKey`). */
 function tierForValidation (t: TierId): string {
-  if (t === 'investor') return 'lifetime'
-  return t
+  if (t === 'pro') return 'pro'
+  return 'free'
 }
 
 function buildCtaHref (tier: TierId, promoCode: string, ctaBasePath: '/signup' | '/dashboard'): string {
   const params = new URLSearchParams()
-  params.set('tier', tier)
+  params.set('tier', tier === 'pro' ? 'pro' : 'free')
+  const promo = promoCode.trim()
+  if (promo) params.set('promo', promo.toUpperCase())
+  if (ctaBasePath === '/dashboard') {
+    return `/dashboard?${params.toString()}#promo-upgrade`
+  }
+  return `/signup?${params.toString()}`
+}
+
+function buildFoundingSignupHref (promoCode: string, ctaBasePath: '/signup' | '/dashboard'): string {
+  const params = new URLSearchParams()
+  params.set('tier', 'founding')
   const promo = promoCode.trim()
   if (promo) params.set('promo', promo.toUpperCase())
   if (ctaBasePath === '/dashboard') {
@@ -117,8 +118,7 @@ function buildCtaHref (tier: TierId, promoCode: string, ctaBasePath: '/signup' |
 function isCurrentTier (tier: TierId, eff: EffectiveTier | null | undefined): boolean {
   if (eff == null) return false
   if (eff === 'free' && tier === 'free') return true
-  if (eff === 'collector' && tier === 'collector') return true
-  if ((eff === 'investor' || eff === 'lifetime') && tier === 'investor') return true
+  if (eff === 'pro' && tier === 'pro') return true
   return false
 }
 
@@ -155,7 +155,7 @@ export function PricingSection ({
     return () => clearTimeout(t)
   }, [promoCode, tierKey])
 
-  async function startCheckout (tier: 'collector' | 'investor' | 'founding') {
+  async function startCheckout (tier: 'pro' | 'founding') {
     if (!accessToken) return
     setCheckoutLoading(tier)
     setFoundingLoading(tier === 'founding')
@@ -179,7 +179,7 @@ export function PricingSection ({
           Simple pricing
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-center text-[var(--slab-text-muted)]">
-          Start free. Upgrade when your collection grows.
+          Start free. Move to Pro when you want unlimited cards and full AI.
         </p>
 
         {showFoundingBanner && (
@@ -187,17 +187,20 @@ export function PricingSection ({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-lg font-semibold text-amber-100">
-                  🏆 Founding Member Offer — Limited Spots
+                  🏆 Founding Member — limited spots
+                </p>
+                <p className="mt-2 max-w-xl text-sm font-medium text-amber-50">
+                  Lock in Pro access forever for $49 — less than 10 months of Pro at $5/mo.
                 </p>
                 <p className="mt-2 max-w-xl text-sm text-amber-200/90">
-                  $49 one-time payment for lifetime Investor access. First 50 members only.
+                  Same as Pro forever: unlimited cards, full AI, alerts, market values, trade tools, and tax export.
                 </p>
                 <p className="mt-2 text-xs text-amber-200/70">Have a code? Enter it below — it applies before checkout.</p>
               </div>
               {loggedInStripe && accessToken ? (
                 lifetimeActive ? (
                   <span className="inline-flex min-h-[48px] w-full shrink-0 items-center justify-center rounded-xl border border-amber-500/40 bg-amber-500/10 px-6 py-3 text-sm font-semibold text-amber-100 sm:w-auto">
-                    Current plan
+                    Founding Member
                   </span>
                 ) : (
                   <button
@@ -206,15 +209,15 @@ export function PricingSection ({
                     onClick={() => void startCheckout('founding')}
                     className="inline-flex min-h-[48px] w-full shrink-0 items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-300 disabled:opacity-50 sm:w-auto sm:min-h-0"
                   >
-                    {foundingLoading ? 'Redirecting…' : 'Claim Lifetime Access'}
+                    {foundingLoading ? 'Redirecting…' : 'Claim Founding — $49'}
                   </button>
                 )
               ) : (
                 <Link
-                  to={buildCtaHref('investor', promoCode, ctaBasePath)}
+                  to={buildFoundingSignupHref(promoCode, ctaBasePath)}
                   className="inline-flex min-h-[48px] w-full shrink-0 items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-sm font-semibold text-amber-950 transition hover:bg-amber-300 sm:w-auto sm:min-h-0"
                 >
-                  Claim Lifetime Access
+                  Claim Founding — $49
                 </Link>
               )}
             </div>
@@ -236,7 +239,7 @@ export function PricingSection ({
           </div>
         </div>
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+        <div className="mt-12 grid gap-6 lg:grid-cols-2 lg:max-w-4xl lg:mx-auto">
           {TIERS.map((t) => {
             const active = selectedTier === t.id
             const priced = displayPrice(t.price, promoMeta)
@@ -257,7 +260,7 @@ export function PricingSection ({
               >
                 {t.highlight && (
                   <span className="mb-6 inline-block rounded-full bg-slab-teal/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slab-teal-light">
-                    ⭐ Most Popular
+                    ⭐ Most popular
                   </span>
                 )}
                 <div className="flex flex-wrap items-center gap-2">
@@ -318,13 +321,11 @@ export function PricingSection ({
                     disabled={checkoutLoading !== null}
                     onClick={(e) => {
                       e.stopPropagation()
-                      void startCheckout(t.id === 'investor' ? 'investor' : 'collector')
+                      void startCheckout('pro')
                     }}
                     className="mt-8 inline-flex min-h-[48px] w-full items-center justify-center rounded-lg bg-slab-teal px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50 sm:w-auto sm:min-h-0 sm:py-2.5"
                   >
-                    {checkoutLoading === (t.id === 'investor' ? 'investor' : 'collector')
-                      ? 'Redirecting…'
-                      : t.cta}
+                    {checkoutLoading === 'pro' ? 'Redirecting…' : t.cta}
                   </button>
                 ) : (
                   <Link

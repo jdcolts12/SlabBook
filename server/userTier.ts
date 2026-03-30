@@ -36,23 +36,15 @@ function statusActive (status: string | null): boolean {
 }
 
 /** Effective paid tier for feature gating (matches client tierLimits). */
-export function effectiveTier (row: UserPlanRow | null): 'free' | 'collector' | 'investor' | 'lifetime' {
+export function effectiveTier (row: UserPlanRow | null): 'free' | 'pro' | 'lifetime' {
   if (!row) return 'free'
   const t = (row.subscription_tier ?? 'free').toLowerCase()
   if (row.lifetime_access || t === 'lifetime') return 'lifetime'
-  if (t === 'investor' && (statusActive(row.subscription_status) || row.subscription_ends_at == null)) {
-    return 'investor'
-  }
-  if (t === 'collector') {
-    if (statusActive(row.subscription_status)) return 'collector'
-    if (row.trial_ends_at && new Date(row.trial_ends_at).getTime() > Date.now()) return 'collector'
-  }
-  if (t === 'investor' && row.trial_ends_at && new Date(row.trial_ends_at).getTime() > Date.now()) {
-    return 'investor'
+  if (t === 'pro' || t === 'collector' || t === 'investor') {
+    if (statusActive(row.subscription_status)) return 'pro'
+    if (row.trial_ends_at && new Date(row.trial_ends_at).getTime() > Date.now()) return 'pro'
   }
   if (t === 'free') return 'free'
-  if (t === 'collector') return 'free'
-  if (t === 'investor') return 'free'
   return 'free'
 }
 
@@ -60,8 +52,6 @@ export function maxCardsForTier (tier: ReturnType<typeof effectiveTier>): number
   switch (tier) {
     case 'free':
       return 15
-    case 'collector':
-      return 500
     default:
       return Number.POSITIVE_INFINITY
   }
@@ -69,15 +59,9 @@ export function maxCardsForTier (tier: ReturnType<typeof effectiveTier>): number
 
 export function canUseFeature (row: UserPlanRow | null, feature: PlanFeature): boolean {
   const tier = effectiveTier(row)
-  if (tier === 'lifetime' || tier === 'investor') {
+  if (tier === 'lifetime' || tier === 'pro') {
     return true
   }
-  if (tier === 'collector') {
-    return (
-      feature !== 'tax_export' // Investor-only in product copy
-    )
-  }
-  // free
   switch (feature) {
     case 'ai_insights':
     case 'market_values':

@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { SlabBookLogo } from '../SlabBookLogo'
 import { useAuth } from '../../hooks/useAuth'
+import { useUserProfile } from '../../hooks/useUserProfile'
+import { effectiveTier, type UserPlanFields } from '../../lib/tierLimits'
 
 const navMutedClass =
   'rounded-lg px-3 py-3 text-base font-medium text-[var(--slab-text-muted)] transition hover:bg-white/5 hover:text-[var(--slab-text)] active:bg-white/10 sm:py-2 sm:text-sm'
 
 export function MarketingNav () {
   const { user } = useAuth()
+  const { profile } = useUserProfile(user?.id)
+  const showUpgrade = user && effectiveTier(profile as UserPlanFields | null) === 'free'
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -56,6 +60,14 @@ export function MarketingNav () {
           <Link to="/pricing" className="text-[var(--slab-text-muted)] hover:text-[var(--slab-text)]">
             Pricing
           </Link>
+          {showUpgrade && (
+            <Link
+              to="/pricing"
+              className="rounded-lg border border-slab-teal/40 bg-slab-teal/10 px-3 py-1.5 font-semibold text-slab-teal-light transition hover:bg-slab-teal/20"
+            >
+              Upgrade
+            </Link>
+          )}
           {user ? (
             <>
               <Link to="/dashboard/collection" className="text-[var(--slab-text-muted)] hover:text-[var(--slab-text)]">
@@ -103,6 +115,15 @@ export function MarketingNav () {
               <Link to="/pricing" className={navMutedClass} onClick={() => setMenuOpen(false)}>
                 Pricing
               </Link>
+              {showUpgrade && (
+                <Link
+                  to="/pricing"
+                  className="mt-1 inline-flex min-h-[48px] items-center justify-center rounded-xl border border-slab-teal/40 bg-slab-teal/15 px-4 text-base font-semibold text-slab-teal-light"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Upgrade
+                </Link>
+              )}
               {user ? (
                 <>
                   <Link to="/dashboard/collection" className={navMutedClass} onClick={() => setMenuOpen(false)}>

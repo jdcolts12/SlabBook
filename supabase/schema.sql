@@ -11,7 +11,7 @@ create table if not exists public.users (
   tier text not null default 'free'
     check (tier in ('free', 'pro', 'enterprise')),
   subscription_tier text not null default 'free'
-    check (subscription_tier in ('free', 'collector', 'investor', 'lifetime')),
+    check (subscription_tier in ('free', 'pro', 'lifetime')),
   promo_code_used text,
   trial_ends_at timestamptz,
   subscription_ends_at timestamptz,
@@ -131,7 +131,7 @@ create table if not exists public.promo_codes (
     check (type in ('percent_off', 'fixed_off', 'free_months', 'lifetime_free')),
   value numeric,
   applicable_tier text not null default 'any'
-    check (applicable_tier in ('collector', 'investor', 'lifetime', 'any')),
+    check (applicable_tier in ('pro', 'lifetime', 'any')),
   max_uses integer,
   uses_count integer not null default 0,
   expires_at timestamptz,

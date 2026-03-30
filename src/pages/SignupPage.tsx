@@ -16,8 +16,8 @@ export function SignupPage () {
   const [promoCode, setPromoCode] = useState(() => searchParams.get('promo')?.trim().toUpperCase() ?? '')
   const [selectedTier] = useState(() => {
     const tier = searchParams.get('tier')?.trim().toLowerCase()
-    if (tier === 'investor') return 'lifetime'
-    if (tier === 'collector') return 'collector'
+    if (tier === 'founding' || tier === 'investor') return 'lifetime'
+    if (tier === 'pro' || tier === 'collector') return 'pro'
     return 'free'
   })
   const [error, setError] = useState<string | null>(null)

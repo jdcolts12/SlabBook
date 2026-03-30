@@ -16,6 +16,13 @@ export function normalizePromoCode (raw: string): string {
   return raw.trim().toUpperCase()
 }
 
+/** Maps legacy DB tiers and request keys to canonical promo keys. */
+export function normalizePromoTierKey (raw: string): string {
+  const x = raw.trim().toLowerCase()
+  if (x === 'collector' || x === 'investor') return 'pro'
+  return x
+}
+
 export function discountSuccessMessage (row: PromoCodeRow): string {
   switch (row.type) {
     case 'lifetime_free':
@@ -94,7 +101,9 @@ export async function validatePromoCode (
 
   const tier = opts.tier
   if (promo.applicable_tier !== 'any' && tier && tier !== 'free') {
-    if (promo.applicable_tier !== tier) {
+    const want = normalizePromoTierKey(promo.applicable_tier)
+    const got = normalizePromoTierKey(tier)
+    if (want !== got) {
       return { valid: false, error: 'Code not found' }
     }
   }
@@ -135,7 +144,7 @@ export function buildUserUpdateFromPromo (row: PromoCodeRow, now = new Date()): 
       const end = new Date(now)
       end.setMonth(end.getMonth() + months)
       return {
-        subscription_tier: 'collector',
+        subscription_tier: 'pro',
         trial_ends_at: end.toISOString(),
         promo_code_used: row.code,
       }
@@ -146,21 +155,21 @@ export function buildUserUpdateFromPromo (row: PromoCodeRow, now = new Date()): 
         const end = new Date(now)
         end.setMonth(end.getMonth() + 1)
         return {
-          subscription_tier: 'collector',
+          subscription_tier: 'pro',
           trial_ends_at: end.toISOString(),
           promo_code_used: row.code,
         }
       }
       if (row.applicable_tier === 'lifetime') {
         return {
-          subscription_tier: 'investor',
+          subscription_tier: 'pro',
           subscription_ends_at: null,
           trial_ends_at: null,
           promo_code_used: row.code,
         }
       }
       return {
-        subscription_tier: 'collector',
+        subscription_tier: 'pro',
         promo_code_used: row.code,
       }
     }

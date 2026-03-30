@@ -101,7 +101,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
   const plan = await fetchUserPlan(admin, user.id)
   if (!canUseFeature(plan, 'ai_insights')) {
     return res.status(403).json({
-      error: 'AI insights require a Collector plan or higher. Upgrade to unlock portfolio analysis.',
+      error: 'AI insights require a Pro plan. Upgrade to unlock portfolio analysis.',
     })
   }
 

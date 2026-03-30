@@ -12,9 +12,9 @@ type Props = {
 
 export function UpgradeModal ({
   open,
-  title = 'Upgrade to Collector',
+  title = 'Upgrade to Pro',
   body,
-  ctaLabel = 'Get Collector',
+  ctaLabel = 'Get Pro',
   onCta,
   onClose,
   ctaLoading = false,

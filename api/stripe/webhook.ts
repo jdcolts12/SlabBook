@@ -120,7 +120,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
           const { data: authUser } = await admin.auth.admin.getUserById(userId)
           const email = authUser?.user?.email
           if (email) {
-            await sendWelcomeEmail(email, 'Founding / Lifetime')
+            await sendWelcomeEmail(email, 'Founding Member')
           }
           break
         }
@@ -136,7 +136,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
           const retrieved = await stripe.subscriptions.retrieve(subId)
           const sub = retrieved as Stripe.Subscription
           const st = mapStripeSubStatus(sub.status)
-          const tierDb = tier === 'investor' ? 'investor' : 'collector'
+          const tierDb = 'pro'
 
           await admin
             .from('users')
@@ -156,7 +156,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
           const { data: authWelcome } = await admin.auth.admin.getUserById(userId)
           const welcomeEmail = authWelcome?.user?.email
           if (welcomeEmail) {
-            await sendWelcomeEmail(welcomeEmail, tierDb === 'investor' ? 'Investor' : 'Collector')
+            await sendWelcomeEmail(welcomeEmail, 'Pro')
           }
         }
         break
@@ -188,13 +188,10 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
           break
         }
 
-        const metaTier = (sub.metadata?.tier ?? '').toLowerCase()
-        const tierDb = metaTier === 'investor' ? 'investor' : 'collector'
-
         await admin
           .from('users')
           .update({
-            subscription_tier: tierDb,
+            subscription_tier: 'pro',
             subscription_status: mapStripeSubStatus(sub.status),
             subscription_id: sub.id,
             current_period_end: subscriptionPeriodEndIso(sub),
