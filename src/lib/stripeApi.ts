@@ -30,7 +30,7 @@ export async function createCheckoutSession (
 ): Promise<string> {
   let res: Response
   try {
-    res = await fetch(apiUrl('/api/stripe/create-checkout-session'), {
+    res = await fetch(apiUrl('/api/create-checkout-session'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ export async function createCheckoutSession (
 export async function createPortalSession (accessToken: string): Promise<string> {
   let res: Response
   try {
-    res = await fetch(apiUrl('/api/stripe/create-portal-session'), {
+    res = await fetch(apiUrl('/api/create-portal-session'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -116,7 +116,7 @@ export type StripeInvoiceRow = {
 export async function listStripeInvoices (accessToken: string): Promise<StripeInvoiceRow[]> {
   let res: Response
   try {
-    res = await fetch(apiUrl('/api/stripe/list-invoices'), {
+    res = await fetch(apiUrl('/api/list-invoices'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
