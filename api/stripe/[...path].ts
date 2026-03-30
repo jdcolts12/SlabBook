@@ -11,6 +11,8 @@ const KNOWN = new Set([
   'list-invoices',
 ])
 
+const MAX_ROUTE_LEN = 128
+
 /** Strip leading/trailing slashes, collapse repeats, lowercase for matching. */
 function normalizeStripeRoute (segment: string): string {
   return segment
@@ -18,6 +20,19 @@ function normalizeStripeRoute (segment: string): string {
     .replace(/\/+/g, '/')
     .replace(/^\/+|\/+$/g, '')
     .toLowerCase()
+}
+
+/**
+ * Single segment, slug-only (hyphens allowed). Rejects traversal, weird chars, multi-segment paths.
+ */
+function parseSafeRouteToken (normalized: string): string | null {
+  if (!normalized || normalized.length > MAX_ROUTE_LEN) return null
+  if (normalized.includes('..') || normalized.includes('\\')) return null
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.length !== 1) return null
+  const seg = parts[0]!
+  if (!/^[a-z0-9-]+$/.test(seg)) return null
+  return seg
 }
 
 /** Pull the path after `/api/stripe/` from a URL or path string. */
@@ -44,6 +59,7 @@ function routeFromQueryPath (req: VercelRequest): string {
     .join('/')
 }
 
+/** Last resort: some proxies set these; client-spoofable — use only if URL/query empty. */
 function routeFromHeaders (req: VercelRequest): string {
   const h = req.headers
   const candidates: Array<string | string[] | undefined> = [
@@ -62,6 +78,11 @@ function routeFromHeaders (req: VercelRequest): string {
   return ''
 }
 
+function jsonError (res: VercelResponse, status: number, body: Record<string, unknown>) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  return res.status(status).json(body)
+}
+
 /**
  * Fallback catch-all for /api/stripe/* JSON routes when explicit files
  * don’t match (or Vercel passes odd `req.url` / query shapes).
@@ -69,31 +90,33 @@ function routeFromHeaders (req: VercelRequest): string {
 export default async function handler (req: VercelRequest, res: VercelResponse) {
   const rawUrl = typeof req.url === 'string' ? req.url : ''
 
-  const routeFromUrl = stripAfterApiStripe(rawUrl)
+  /** Prefer router-provided query (Vercel) over raw URL, then untrusted headers last. */
   const routeFromQuery = routeFromQueryPath(req)
+  const routeFromUrl = stripAfterApiStripe(rawUrl)
   const routeFromHdr = routeFromHeaders(req)
 
-  const rawRoute = routeFromUrl || routeFromQuery || routeFromHdr
+  const rawRoute = routeFromQuery || routeFromUrl || routeFromHdr
   const normalized = normalizeStripeRoute(rawRoute)
+  const token = parseSafeRouteToken(normalized)
 
-  if (normalized === 'create-checkout-session') return handleStripeCheckout(req, res)
-  if (normalized === 'create-portal-session') return handleStripePortal(req, res)
-  if (normalized === 'list-invoices') return handleStripeInvoices(req, res)
+  if (token === null && normalized.length > 0) {
+    return jsonError(res, 400, {
+      error: 'Invalid Stripe API path.',
+    })
+  }
+
+  if (token === 'create-checkout-session') return handleStripeCheckout(req, res)
+  if (token === 'create-portal-session') return handleStripePortal(req, res)
+  if (token === 'list-invoices') return handleStripeInvoices(req, res)
 
   res.setHeader('Allow', 'POST')
-  return res.status(404).json({
-    error: `Unknown Stripe route: "${normalized || rawRoute}" (query="${routeFromQuery}", url="${routeFromUrl}", header="${routeFromHdr}")`,
-    route: normalized || rawRoute,
-    from: {
-      query: routeFromQuery,
-      url: routeFromUrl,
-      header: routeFromHdr,
-      rawUrl: rawUrl.slice(0, 200),
-    },
+  return jsonError(res, 404, {
+    error: 'Unknown Stripe route.',
+    route: token ?? '',
     hint:
-      !normalized
+      !token
         ? 'Could not parse route after /api/stripe/ — check proxy, rewrites, and Vercel function URL.'
-        : !KNOWN.has(normalized)
+        : !KNOWN.has(token)
           ? `Expected one of: ${[...KNOWN].join(', ')}`
           : undefined,
   })
