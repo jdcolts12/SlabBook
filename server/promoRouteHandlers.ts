@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import type { IncomingHttpHeaders } from 'node:http'
+import { createSupabaseAdmin } from './supabaseAdmin'
 import { bearerFromHeaders, getJson } from './http'
 
 type ApiRequest = {
@@ -52,16 +52,13 @@ export async function handlePromoValidate (req: ApiRequest, res: ApiResponse) {
       return res.status(405).json({ error: 'Method not allowed' })
     }
 
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-    const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !supabaseServiceRole) {
-      return res.status(500).json({ error: 'Missing Supabase server configuration.' })
+    const admin = createSupabaseAdmin()
+    if (!admin) {
+      return res.status(200).json({
+        valid: false,
+        error: 'Promo is temporarily unavailable. Please try again in a few minutes.',
+      })
     }
-
-    const admin = createClient(supabaseUrl, supabaseServiceRole, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
 
     const json = getJson(req.body)
     const code = normalizePromoCode(typeof json.code === 'string' ? json.code : '')
@@ -210,21 +207,15 @@ export async function handlePromoRedeem (req: ApiRequest, res: ApiResponse) {
       return res.status(405).json({ error: 'Method not allowed' })
     }
 
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-    const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !supabaseServiceRole) {
-      return res.status(500).json({ error: 'Missing Supabase server configuration.' })
+    const admin = createSupabaseAdmin()
+    if (!admin) {
+      return res.status(503).json({ error: 'Missing Supabase server configuration.' })
     }
 
     const token = bearerFromHeaders(req.headers)
     if (!token) {
       return res.status(401).json({ error: 'Missing bearer token.' })
     }
-
-    const admin = createClient(supabaseUrl, supabaseServiceRole, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
 
     const {
       data: { user },
