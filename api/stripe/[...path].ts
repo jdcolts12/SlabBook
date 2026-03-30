@@ -5,46 +5,96 @@ import {
   handleStripePortal,
 } from '../../server/stripeJsonHandlers'
 
-/**
- * Fallback catch-all for /api/stripe/* JSON routes.
- *
- * Some Vercel builds can behave oddly with catch-all query params; this handler
- * also parses `req.url` so requests like:
- *   /api/stripe/create-checkout-session
- * still map correctly.
- */
-export default async function handler (req: VercelRequest, res: VercelResponse) {
+const KNOWN = new Set([
+  'create-checkout-session',
+  'create-portal-session',
+  'list-invoices',
+])
+
+/** Strip leading/trailing slashes, collapse repeats, lowercase for matching. */
+function normalizeStripeRoute (segment: string): string {
+  return segment
+    .trim()
+    .replace(/\/+/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+    .toLowerCase()
+}
+
+/** Pull the path after `/api/stripe/` from a URL or path string. */
+function stripAfterApiStripe (raw: string): string {
+  const withoutQuery = raw.split('?')[0] ?? ''
+  const lower = withoutQuery.toLowerCase()
+  const needle = '/api/stripe/'
+  const idx = lower.indexOf(needle)
+  if (idx === -1) return ''
+  const after = withoutQuery.slice(idx + needle.length)
+  try {
+    return decodeURIComponent(after).replace(/\/$/, '')
+  } catch {
+    return after.replace(/\/$/, '')
+  }
+}
+
+function routeFromQueryPath (req: VercelRequest): string {
   const raw = req.query?.path
   const segments = Array.isArray(raw) ? raw : raw != null ? [String(raw)] : []
-  const cleaned = segments.map((s) => String(s)).filter(Boolean)
-  // If Vercel provides the route via query params, normalize it into "a/b/c" format.
-  const routeFromQuery = cleaned.join('/')
+  return segments
+    .map((s) => String(s))
+    .filter(Boolean)
+    .join('/')
+}
 
-  // Prefer `req.url` parsing since some deployments may pass empty query params.
+function routeFromHeaders (req: VercelRequest): string {
+  const h = req.headers
+  const candidates: Array<string | string[] | undefined> = [
+    h['x-forwarded-uri'],
+    h['x-invoke-path'],
+    h['x-vercel-path'],
+    h['x-matched-path'],
+  ]
+  for (const c of candidates) {
+    const s = typeof c === 'string' ? c : Array.isArray(c) ? c[0] : ''
+    if (s) {
+      const r = stripAfterApiStripe(s)
+      if (r) return r
+    }
+  }
+  return ''
+}
+
+/**
+ * Fallback catch-all for /api/stripe/* JSON routes when explicit files
+ * don’t match (or Vercel passes odd `req.url` / query shapes).
+ */
+export default async function handler (req: VercelRequest, res: VercelResponse) {
   const rawUrl = typeof req.url === 'string' ? req.url : ''
-  const routeFromUrl = (() => {
-    // rawUrl can be either:
-    // - "/api/stripe/create-checkout-session"
-    // - "https://example.com/api/stripe/create-checkout-session"
-    const needle = '/api/stripe/'
-    const idx = rawUrl.lastIndexOf(needle)
-    if (idx === -1) return ''
-    const after = rawUrl.slice(idx + needle.length)
-    const first = after.split('?')[0] ?? ''
-    return decodeURIComponent(first).replace(/\/$/, '')
-  })()
 
-  const route = routeFromUrl || routeFromQuery
+  const routeFromUrl = stripAfterApiStripe(rawUrl)
+  const routeFromQuery = routeFromQueryPath(req)
+  const routeFromHdr = routeFromHeaders(req)
 
-  if (route === 'create-checkout-session') return handleStripeCheckout(req, res)
-  if (route === 'create-portal-session') return handleStripePortal(req, res)
-  if (route === 'list-invoices') return handleStripeInvoices(req, res)
+  const rawRoute = routeFromUrl || routeFromQuery || routeFromHdr
+  const normalized = normalizeStripeRoute(rawRoute)
+
+  if (normalized === 'create-checkout-session') return handleStripeCheckout(req, res)
+  if (normalized === 'create-portal-session') return handleStripePortal(req, res)
+  if (normalized === 'list-invoices') return handleStripeInvoices(req, res)
 
   res.setHeader('Allow', 'POST')
   return res.status(404).json({
-    error: `Unknown Stripe route: "${route}" (query="${routeFromQuery}", url="${routeFromUrl}")`,
-    route,
-    from: { query: routeFromQuery, url: routeFromUrl },
+    error: `Unknown Stripe route: "${normalized || rawRoute}" (query="${routeFromQuery}", url="${routeFromUrl}", header="${routeFromHdr}")`,
+    route: normalized || rawRoute,
+    from: {
+      query: routeFromQuery,
+      url: routeFromUrl,
+      header: routeFromHdr,
+      rawUrl: rawUrl.slice(0, 200),
+    },
+    hint:
+      !normalized
+        ? 'Could not parse route after /api/stripe/ — check proxy, rewrites, and Vercel function URL.'
+        : !KNOWN.has(normalized)
+          ? `Expected one of: ${[...KNOWN].join(', ')}`
+          : undefined,
   })
 }
-
