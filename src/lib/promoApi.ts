@@ -17,7 +17,7 @@ export async function validatePromoRequest (
   opts?: { tier?: string; userId?: string | null },
 ): Promise<ValidatePromoResponse> {
   try {
-    const res = await fetch(apiUrl('/api/promo/validate'), {
+    const res = await fetch(apiUrl('/api/promo-validate'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -36,11 +36,14 @@ export async function validatePromoRequest (
     }
 
     if (!data || typeof data !== 'object') {
+      const snippet = raw.replace(/\s+/g, ' ').trim().slice(0, 200)
       const hint =
         res.status === 404
           ? 'Promo API not found. Hard-refresh the page (clear cache) or try again later.'
           : res.status >= 500
-            ? 'Promo service is busy. Try again in a moment.'
+            ? snippet
+              ? `Promo request failed (${res.status}): ${snippet}`
+              : 'Promo service is busy. Try again in a moment.'
             : `Promo request failed (${res.status}). Check your connection and try again.`
       return { valid: false, error: hint }
     }
@@ -61,7 +64,7 @@ export async function redeemPromoRequest (
   tier?: string,
 ): Promise<{ ok?: boolean; error?: string; message?: string }> {
   try {
-    const res = await fetch(apiUrl('/api/promo/redeem'), {
+    const res = await fetch(apiUrl('/api/promo-redeem'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

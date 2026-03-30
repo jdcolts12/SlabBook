@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { handlePromoRedeem, handlePromoValidate } from '../../server/promoRouteHandlers'
 
 /**
  * /api/promo/validate and /api/promo/redeem — single function for Hobby plan limit.
@@ -23,9 +22,11 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
     const action = promoActionFromRequest(req)
 
     if (action === 'validate') {
+      const { handlePromoValidate } = await import('../../server/promoRouteHandlers')
       return await handlePromoValidate(req, res)
     }
     if (action === 'redeem') {
+      const { handlePromoRedeem } = await import('../../server/promoRouteHandlers')
       return await handlePromoRedeem(req, res)
     }
 
