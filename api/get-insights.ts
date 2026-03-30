@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
+import { tryReserveClaudeCall } from '../server/claudeCostProtection'
+import { isDemoMode } from '../server/demoMode'
+import { fakeInsightsMarkdown } from '../server/demoResponses'
 import { canUseFeature, fetchUserPlan } from '../server/userTier'
 
 type ApiRequest = {
@@ -126,6 +129,34 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     })
   }
 
+  const reserve = await tryReserveClaudeCall(admin, 'get-insights')
+  if (!reserve.ok) {
+    return res.status(503).json({
+      error: 'Daily Claude API limit reached for this deployment. Try again tomorrow (UTC).',
+    })
+  }
+
+  if (isDemoMode()) {
+    const content = fakeInsightsMarkdown()
+    const { data: inserted, error: insertError } = await admin
+      .from('ai_insights')
+      .insert({
+        user_id: user.id,
+        content,
+        is_read: false,
+      })
+      .select('id, created_at')
+      .single()
+
+    if (insertError) return res.status(500).json({ error: insertError.message })
+
+    return res.status(200).json({
+      insight: content,
+      id: inserted?.id,
+      created_at: inserted?.created_at,
+    })
+  }
+
   const collectionJson = JSON.stringify(cardsToJsonPayload(cards), null, 2)
 
   const userPrompt = `Here is my sports card collection: ${collectionJson}
@@ -146,10 +177,15 @@ Use exactly these Markdown section headers (##) in this order:
 ## Sleeper pick
 ## Action this week`
 
+  const apiKey = anthropicApiKey
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY.' })
+  }
+
   const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'x-api-key': anthropicApiKey,
+      'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     },

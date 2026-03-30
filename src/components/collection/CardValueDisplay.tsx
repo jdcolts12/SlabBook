@@ -99,7 +99,11 @@ export function CardValueDisplay ({
         </p>
       )}
       <p className="mt-1 text-[10px] text-zinc-600">{formatLastUpdatedLine(card.last_updated)}</p>
-      {(card.pricing_source === 'claude_estimate' || card.confidence) && (
+      {card.pricing_source === 'demo_mode' && (
+        <p className="mt-0.5 text-[9px] text-amber-400/90">Demo estimate — not AI</p>
+      )}
+      {(card.pricing_source === 'claude_estimate' || card.confidence) &&
+        card.pricing_source !== 'demo_mode' && (
         <p className="mt-0.5 text-[9px] text-zinc-600">Powered by Claude AI</p>
       )}
       {showDisclaimer && (

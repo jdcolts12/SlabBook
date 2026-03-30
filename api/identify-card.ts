@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
+import { tryReserveClaudeCall } from '../server/claudeCostProtection'
+import { isDemoMode } from '../server/demoMode'
+import { fakeIdentifyPayload } from '../server/demoResponses'
 
 type ApiRequest = {
   method?: string
@@ -113,10 +116,14 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
   const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY
 
-  if (!supabaseUrl || !supabaseServiceRole || !anthropicApiKey) {
+  if (!supabaseUrl || !supabaseServiceRole) {
     return res.status(500).json({
-      error:
-        'Missing server env vars. Required: VITE_SUPABASE_URL (or SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY.',
+      error: 'Missing server env vars. Required: VITE_SUPABASE_URL (or SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY.',
+    })
+  }
+  if (!isDemoMode() && !anthropicApiKey) {
+    return res.status(500).json({
+      error: 'Missing ANTHROPIC_API_KEY (not required when DEMO_MODE is enabled).',
     })
   }
 
@@ -138,6 +145,33 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     return res.status(401).json({ error: 'Invalid or expired auth token.' })
   }
 
+  const reserve = await tryReserveClaudeCall(admin, 'identify-card')
+  if (!reserve.ok) {
+    return res.status(503).json({
+      error: 'Daily Claude API limit reached for this deployment. Try again tomorrow (UTC).',
+    })
+  }
+
+  if (isDemoMode()) {
+    const f = fakeIdentifyPayload()
+    const sport = normalizeSport(asStr(f.sport))
+    const confidence = normalizeConfidence(f.confidence)
+    return res.status(200).json({
+      player_name: asStr(f.player_name),
+      year: asStr(f.year),
+      set_name: asStr(f.set_name),
+      card_number: asStr(f.card_number),
+      variation: asStr(f.variation),
+      sport,
+      grading_company:
+        f.grading_company === null ? null : (asStr(f.grading_company) ?? null),
+      grade: f.grade === null ? null : (asStr(f.grade) ?? null),
+      is_graded: typeof f.is_graded === 'boolean' ? f.is_graded : undefined,
+      confidence,
+      notes: asStr(f.notes),
+    })
+  }
+
   const raw = getJson(req.body)
   const b64 = typeof raw.image_base64 === 'string' ? raw.image_base64.trim() : ''
   const mediaType = typeof raw.media_type === 'string' ? raw.media_type.trim() : ''
@@ -152,11 +186,16 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     return res.status(400).json({ error: 'media_type must be image/jpeg, image/png, or image/webp.' })
   }
 
+  const apiKey = anthropicApiKey
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY.' })
+  }
+
   const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': anthropicApiKey,
+      'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({

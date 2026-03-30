@@ -334,6 +334,14 @@ export function DashboardLayout () {
       </div>
 
       <div className="flex min-h-dvh flex-1 flex-col lg:pl-64">
+        {(import.meta.env.VITE_DEMO_MODE === 'true' || import.meta.env.VITE_DEMO_MODE === '1') && (
+          <div
+            className="border-b border-amber-500/40 bg-amber-500/15 px-4 py-2 text-center text-xs font-medium text-amber-100"
+            role="status"
+          >
+            Demo mode — AI disabled
+          </div>
+        )}
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface)]/90 px-4 backdrop-blur lg:hidden">
           <button
             type="button"

@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
+import { tryReserveClaudeCall } from '../server/claudeCostProtection'
+import { isDemoMode } from '../server/demoMode'
+import { fakeCardEstimate } from '../server/demoResponses'
 
 type ApiRequest = {
   method?: string
@@ -862,10 +865,12 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
 
     const card = row as CardRow
     const lastAt = card.last_updated ? new Date(card.last_updated).getTime() : 0
+    const freshSource =
+      card.pricing_source === 'claude_estimate' || card.pricing_source === 'demo_mode'
     const fresh =
       Number.isFinite(lastAt) &&
       Date.now() - lastAt < CACHE_MS &&
-      card.pricing_source === 'claude_estimate' &&
+      freshSource &&
       card.current_value != null
 
     if (fresh && !forceRefresh) {
@@ -901,13 +906,67 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       condition: card.condition,
     }
 
+    if (isDemoMode()) {
+      const estimate = fakeCardEstimate(estimateInput)
+      const nowIso = new Date().toISOString()
+      const updatePayload = {
+        current_value: estimate.mid,
+        value_low: estimate.low,
+        value_high: estimate.high,
+        confidence: estimate.confidence,
+        trend: estimate.trend,
+        value_note: estimate.reasoning,
+        pricing_source: 'demo_mode',
+        last_updated: nowIso,
+      }
+      const { error: upErr } = await admin.from('cards').update(updatePayload).eq('id', card.id)
+      if (upErr) {
+        return jsonError(res, 500, upErr.message)
+      }
+      const { error: histErr } = await admin.from('price_history').insert({
+        card_id: card.id,
+        recorded_value: estimate.mid,
+        recorded_at: nowIso,
+        source: estimate.data_source || 'demo_mode',
+      })
+      if (histErr) {
+        console.error('[estimate-card-value] price_history insert skipped:', histErr.message)
+      }
+      return jsonOk(res, 200, {
+        cached: false,
+        current_value: estimate.mid,
+        value_low: estimate.low,
+        value_high: estimate.high,
+        confidence: estimate.confidence,
+        trend: estimate.trend,
+        value_note: estimate.reasoning,
+        pricing_source: 'demo_mode',
+        last_updated: nowIso,
+        data_source: estimate.data_source,
+      })
+    }
+
+    const reserve = await tryReserveClaudeCall(admin, 'estimate-card-value')
+    if (!reserve.ok) {
+      return jsonError(
+        res,
+        503,
+        'Daily Claude API limit reached for this deployment. Try again tomorrow (UTC).',
+      )
+    }
+
+    const anthropicKey = anthropicApiKey
+    if (!anthropicKey) {
+      return jsonError(res, 500, 'Missing ANTHROPIC_API_KEY.')
+    }
+
     let result: Awaited<ReturnType<typeof getCardValue>>
     const wall = createEstimateWall()
     const noAutoRetry = process.env.PRICING_NO_SEARCH_RETRY === '1'
 
     try {
       try {
-        result = await getCardValue(estimateInput, anthropicApiKey, {
+        result = await getCardValue(estimateInput, anthropicKey, {
           signal: wall?.signal,
         })
       } catch (pricingErr) {
@@ -933,7 +992,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
           result.error.slice(0, 200),
         )
         try {
-          result = await getCardValue(estimateInput, anthropicApiKey, { skipWebSearch: true })
+          result = await getCardValue(estimateInput, anthropicKey, { skipWebSearch: true })
         } catch (retryErr) {
           const msg =
             retryErr instanceof Error
