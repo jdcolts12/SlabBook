@@ -1,3 +1,9 @@
+/** Same-origin absolute URL — avoids bad relative resolution on some hosts. */
+function apiUrl (path: string): string {
+  if (typeof window === 'undefined') return path
+  return new URL(path, window.location.origin).href
+}
+
 function errorFromStripeBody (status: number, text: string): string {
   try {
     const j = JSON.parse(text) as { error?: string }
@@ -10,49 +16,74 @@ function errorFromStripeBody (status: number, text: string): string {
   return `HTTP ${status} (empty body)`
 }
 
+function checkoutError (status: number, message: string): string {
+  const m = message.trim()
+  if (!m) return `Checkout failed (HTTP ${status}).`
+  if (m.includes('HTTP ')) return m
+  return `${m} (HTTP ${status})`
+}
+
 export async function createCheckoutSession (
   accessToken: string,
   tier: 'pro' | 'founding',
   promoCode?: string,
 ): Promise<string> {
-  const res = await fetch('/api/stripe/create-checkout-session', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({
-      tier,
-      promo_code: (promoCode ?? '').trim(),
-      user_id: '',
-    }),
-  })
+  let res: Response
+  try {
+    res = await fetch(apiUrl('/api/stripe/create-checkout-session'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        tier,
+        promo_code: (promoCode ?? '').trim(),
+        user_id: '',
+      }),
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(
+      `Network error starting checkout (${msg}). Check connection and that the site URL is correct.`,
+    )
+  }
+
   const text = await res.text()
   let data: { error?: string; url?: string } = {}
   try {
     data = JSON.parse(text) as { error?: string; url?: string }
   } catch {
-    if (!res.ok) throw new Error(errorFromStripeBody(res.status, text))
+    if (!res.ok) throw new Error(checkoutError(res.status, errorFromStripeBody(res.status, text)))
     throw new Error('Checkout returned invalid JSON.')
   }
   if (!res.ok) {
-    throw new Error(data.error ?? errorFromStripeBody(res.status, text))
+    throw new Error(
+      checkoutError(res.status, data.error ?? errorFromStripeBody(res.status, text)),
+    )
   }
   if (!data.url) {
-    throw new Error('Checkout did not return a URL.')
+    throw new Error('Checkout did not return a URL. Check Stripe Dashboard and Vercel env (STRIPE_SECRET_KEY, STRIPE_PRICE_PRO).')
   }
   return data.url
 }
 
 export async function createPortalSession (accessToken: string): Promise<string> {
-  const res = await fetch('/api/stripe/create-portal-session', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ user_id: '' }),
-  })
+  let res: Response
+  try {
+    res = await fetch(apiUrl('/api/stripe/create-portal-session'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ user_id: '' }),
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`Network error opening billing portal (${msg}).`)
+  }
+
   const text = await res.text()
   let data: { error?: string; url?: string } = {}
   try {
@@ -83,14 +114,21 @@ export type StripeInvoiceRow = {
 }
 
 export async function listStripeInvoices (accessToken: string): Promise<StripeInvoiceRow[]> {
-  const res = await fetch('/api/stripe/list-invoices', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ user_id: '' }),
-  })
+  let res: Response
+  try {
+    res = await fetch(apiUrl('/api/stripe/list-invoices'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ user_id: '' }),
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`Network error loading invoices (${msg}).`)
+  }
+
   const text = await res.text()
   let data: { error?: string; invoices?: StripeInvoiceRow[] } = {}
   try {

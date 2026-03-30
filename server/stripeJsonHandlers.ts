@@ -15,6 +15,17 @@ type ApiResponse = {
   status: (code: number) => { json: (body: unknown) => void }
 }
 
+/** Respond to OPTIONS so strict clients / proxies don’t block POST with 405. */
+function handleStripeCorsOptions (req: ApiRequest, res: ApiResponse): boolean {
+  if (req.method !== 'OPTIONS') return false
+  res.setHeader('Allow', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Access-Control-Max-Age', '86400')
+  res.status(200).json({ ok: true })
+  return true
+}
+
 function appOrigin (): string {
   const o = process.env.APP_ORIGIN?.trim()
   if (o) return o.replace(/\/$/, '')
@@ -38,8 +49,9 @@ function priceIdForTier (tier: string): string | null {
 
 export async function handleStripeCheckout (req: ApiRequest, res: ApiResponse) {
   try {
+    if (handleStripeCorsOptions(req, res)) return
     if (req.method !== 'POST') {
-      res.setHeader('Allow', 'POST')
+      res.setHeader('Allow', 'POST, OPTIONS')
       return res.status(405).json({ error: 'Method not allowed' })
     }
 
@@ -260,8 +272,9 @@ export async function handleStripePortal (req: ApiRequest, res: ApiResponse) {
 
 export async function handleStripeInvoices (req: ApiRequest, res: ApiResponse) {
   try {
+    if (handleStripeCorsOptions(req, res)) return
     if (req.method !== 'POST') {
-      res.setHeader('Allow', 'POST')
+      res.setHeader('Allow', 'POST, OPTIONS')
       return res.status(405).json({ error: 'Method not allowed' })
     }
 
