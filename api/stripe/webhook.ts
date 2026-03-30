@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import getRawBody from 'raw-body'
-import Stripe from 'stripe'
 import { createSupabaseAdmin } from '../../server/supabaseAdmin'
 import { redeemPromoAfterCheckout } from '../../server/promoRedeemFromStripe'
 import { sendWelcomeEmail } from '../../server/sendWelcomeEmail'
@@ -11,7 +10,13 @@ export const config = {
   },
 }
 
-function subscriptionPeriodEndIso (sub: Stripe.Subscription): string {
+type StripeSubscription = import('stripe').Stripe.Subscription
+type StripeEvent = import('stripe').Stripe.Event
+type StripeCheckoutSession = import('stripe').Stripe.Checkout.Session
+type StripeInvoice = import('stripe').Stripe.Invoice
+type StripeSubStatus = import('stripe').Stripe.Subscription.Status
+
+function subscriptionPeriodEndIso (sub: StripeSubscription): string {
   const raw = (sub as unknown as { current_period_end?: number }).current_period_end
   if (typeof raw !== 'number' || !Number.isFinite(raw)) {
     return new Date().toISOString()
@@ -19,7 +24,7 @@ function subscriptionPeriodEndIso (sub: Stripe.Subscription): string {
   return new Date(raw * 1000).toISOString()
 }
 
-function mapStripeSubStatus (s: Stripe.Subscription.Status): string {
+function mapStripeSubStatus (s: StripeSubStatus): string {
   switch (s) {
     case 'active':
       return 'active'
@@ -74,8 +79,9 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
     return res.status(400).json({ error: 'Invalid body' })
   }
 
+  const { default: Stripe } = await import('stripe')
   const stripe = new Stripe(secret)
-  let event: Stripe.Event
+  let event: StripeEvent
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
   } catch (e) {
@@ -91,7 +97,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session
+        const session = event.data.object as StripeCheckoutSession
         const userId = session.metadata?.user_id
         const tier = (session.metadata?.tier ?? '').toLowerCase()
         const promo = session.metadata?.promo_code ?? ''
@@ -134,7 +140,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
           }
 
           const retrieved = await stripe.subscriptions.retrieve(subId)
-          const sub = retrieved as Stripe.Subscription
+          const sub = retrieved as StripeSubscription
           const st = mapStripeSubStatus(sub.status)
           const tierDb = 'pro'
 
@@ -163,7 +169,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
       }
 
       case 'customer.subscription.updated': {
-        const sub = event.data.object as Stripe.Subscription
+        const sub = event.data.object as StripeSubscription
         const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id
         if (!customerId) break
 
@@ -201,11 +207,11 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
       }
 
       case 'customer.subscription.deleted': {
-        const sub = event.data.object as Stripe.Subscription
+        const subDel = event.data.object as StripeSubscription
         const { data: row } = await admin
           .from('users')
           .select('id')
-          .eq('subscription_id', sub.id)
+          .eq('subscription_id', subDel.id)
           .maybeSingle()
 
         const uid = row && typeof (row as { id: string }).id === 'string' ? (row as { id: string }).id : null
@@ -224,7 +230,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
       }
 
       case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice
+        const invoice = event.data.object as StripeInvoice
         const customerId =
           typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
         if (!customerId) break

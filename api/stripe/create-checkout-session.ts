@@ -1,7 +1,22 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { handleStripeCheckout } from '../../server/stripeJsonHandlers'
 
-/** Explicit route — avoids catch-all `req.query.path` issues on some Vercel builds. */
+function safeJson500 (res: VercelResponse, message: string) {
+  const r = res as VercelResponse & { headersSent?: boolean; writableEnded?: boolean }
+  if (r.headersSent || r.writableEnded) return
+  return res.status(500).json({ error: message })
+}
+
+/**
+ * Dynamic-import the handler so a bad cold-start in `server/*` returns JSON instead of
+ * a platform “function crashed” page when possible.
+ */
 export default async function handler (req: VercelRequest, res: VercelResponse) {
-  return handleStripeCheckout(req, res)
+  try {
+    const { handleStripeCheckout } = await import('../../server/stripeJsonHandlers')
+    await handleStripeCheckout(req, res)
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Checkout failed'
+    console.error('[create-checkout-session]', e)
+    safeJson500(res, message)
+  }
 }
