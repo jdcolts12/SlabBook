@@ -44,7 +44,9 @@ export function PromoCodeInput ({
           setMessage(res.message)
         } else {
           setStatus('invalid')
-          setMessage(res.error ?? 'Invalid code')
+          const err = typeof res.error === 'string' ? res.error.trim() : ''
+          const generic = /^error$/i.test(err)
+          setMessage(err && !generic ? err : 'Invalid code')
         }
       })()
     }, 500)
