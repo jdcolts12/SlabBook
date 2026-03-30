@@ -1,4 +1,3 @@
-import Stripe from 'stripe'
 import type { IncomingHttpHeaders } from 'node:http'
 import { validatePromoCode } from './promo'
 import { createSupabaseAdmin, getServiceRole, getSupabaseUrl } from './supabaseAdmin'
@@ -32,6 +31,12 @@ function appOrigin (): string {
   const v = process.env.VERCEL_URL?.trim()
   if (v) return `https://${v.replace(/^https?:\/\//, '')}`
   return 'http://localhost:5173'
+}
+
+/** Lazy-load Stripe so importing `stripeJsonHandlers` does not execute the Stripe SDK at module load (avoids rare Vercel cold-start crashes). */
+async function createStripe (secret: string) {
+  const { default: Stripe } = await import('stripe')
+  return new Stripe(secret)
 }
 
 function priceIdForTier (tier: string): string | null {
@@ -128,7 +133,7 @@ export async function handleStripeCheckout (req: ApiRequest, res: ApiResponse) {
       user.email ||
       undefined
 
-    const stripe = new Stripe(secret)
+    const stripe = await createStripe(secret)
 
     let customerId = typeof profile?.stripe_customer_id === 'string' ? profile.stripe_customer_id : null
     if (!customerId) {
@@ -144,10 +149,10 @@ export async function handleStripeCheckout (req: ApiRequest, res: ApiResponse) {
     const successUrl = `${origin}/dashboard?upgrade=success`
     const cancelUrl = `${origin}/pricing`
 
-    const mode: Stripe.Checkout.SessionCreateParams['mode'] =
-      tierRaw === 'founding' ? 'payment' : 'subscription'
+    type SessionMode = import('stripe').Stripe.Checkout.SessionCreateParams['mode']
+    const mode: SessionMode = tierRaw === 'founding' ? 'payment' : 'subscription'
 
-    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+    const sessionParams: import('stripe').Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -198,8 +203,9 @@ export async function handleStripeCheckout (req: ApiRequest, res: ApiResponse) {
 
 export async function handleStripePortal (req: ApiRequest, res: ApiResponse) {
   try {
+    if (handleStripeCorsOptions(req, res)) return
     if (req.method !== 'POST') {
-      res.setHeader('Allow', 'POST')
+      res.setHeader('Allow', 'POST, OPTIONS')
       return res.status(405).json({ error: 'Method not allowed' })
     }
 
@@ -254,7 +260,7 @@ export async function handleStripePortal (req: ApiRequest, res: ApiResponse) {
       return res.status(400).json({ error: 'No Stripe customer on file. Subscribe from pricing first.' })
     }
 
-    const stripe = new Stripe(secret)
+    const stripe = await createStripe(secret)
     const origin = appOrigin()
     const returnUrl = `${origin}/dashboard/settings/billing`
 
@@ -327,7 +333,7 @@ export async function handleStripeInvoices (req: ApiRequest, res: ApiResponse) {
       return res.status(200).json({ invoices: [] })
     }
 
-    const stripe = new Stripe(secret)
+    const stripe = await createStripe(secret)
     const list = await stripe.invoices.list({
       customer: customerId,
       limit: 24,
