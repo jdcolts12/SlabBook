@@ -1,9 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import {
-  handleStripeCheckout,
-  handleStripeInvoices,
-  handleStripePortal,
-} from '../../server/stripeJsonHandlers'
 
 const KNOWN = new Set([
   'create-checkout-session',
@@ -83,41 +78,62 @@ function jsonError (res: VercelResponse, status: number, body: Record<string, un
   return res.status(status).json(body)
 }
 
+function safeJson500 (res: VercelResponse, message: string) {
+  const r = res as VercelResponse & { headersSent?: boolean; writableEnded?: boolean }
+  if (r.headersSent || r.writableEnded) return
+  return jsonError(res, 500, { error: message })
+}
+
 /**
  * Fallback catch-all for /api/stripe/* JSON routes when explicit files
  * don’t match (or Vercel passes odd `req.url` / query shapes).
  */
 export default async function handler (req: VercelRequest, res: VercelResponse) {
-  const rawUrl = typeof req.url === 'string' ? req.url : ''
+  try {
+    const rawUrl = typeof req.url === 'string' ? req.url : ''
 
-  /** Prefer router-provided query (Vercel) over raw URL, then untrusted headers last. */
-  const routeFromQuery = routeFromQueryPath(req)
-  const routeFromUrl = stripAfterApiStripe(rawUrl)
-  const routeFromHdr = routeFromHeaders(req)
+    /** Prefer router-provided query (Vercel) over raw URL, then untrusted headers last. */
+    const routeFromQuery = routeFromQueryPath(req)
+    const routeFromUrl = stripAfterApiStripe(rawUrl)
+    const routeFromHdr = routeFromHeaders(req)
 
-  const rawRoute = routeFromQuery || routeFromUrl || routeFromHdr
-  const normalized = normalizeStripeRoute(rawRoute)
-  const token = parseSafeRouteToken(normalized)
+    const rawRoute = routeFromQuery || routeFromUrl || routeFromHdr
+    const normalized = normalizeStripeRoute(rawRoute)
+    const token = parseSafeRouteToken(normalized)
 
-  if (token === null && normalized.length > 0) {
-    return jsonError(res, 400, {
-      error: 'Invalid Stripe API path.',
+    if (token === null && normalized.length > 0) {
+      return jsonError(res, 400, {
+        error: 'Invalid Stripe API path.',
+      })
+    }
+
+    if (token === 'create-checkout-session') {
+      const { handleStripeCheckout } = await import('../../server/stripeJsonHandlers')
+      return handleStripeCheckout(req, res)
+    }
+    if (token === 'create-portal-session') {
+      const { handleStripePortal } = await import('../../server/stripeJsonHandlers')
+      return handleStripePortal(req, res)
+    }
+    if (token === 'list-invoices') {
+      const { handleStripeInvoices } = await import('../../server/stripeJsonHandlers')
+      return handleStripeInvoices(req, res)
+    }
+
+    res.setHeader('Allow', 'POST')
+    return jsonError(res, 404, {
+      error: 'Unknown Stripe route.',
+      route: token ?? '',
+      hint:
+        !token
+          ? 'Could not parse route after /api/stripe/ — check proxy, rewrites, and Vercel function URL.'
+          : !KNOWN.has(token)
+            ? `Expected one of: ${[...KNOWN].join(', ')}`
+            : undefined,
     })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Stripe route failed'
+    console.error('[stripe catch-all]', e)
+    return safeJson500(res, message)
   }
-
-  if (token === 'create-checkout-session') return handleStripeCheckout(req, res)
-  if (token === 'create-portal-session') return handleStripePortal(req, res)
-  if (token === 'list-invoices') return handleStripeInvoices(req, res)
-
-  res.setHeader('Allow', 'POST')
-  return jsonError(res, 404, {
-    error: 'Unknown Stripe route.',
-    route: token ?? '',
-    hint:
-      !token
-        ? 'Could not parse route after /api/stripe/ — check proxy, rewrites, and Vercel function URL.'
-        : !KNOWN.has(token)
-          ? `Expected one of: ${[...KNOWN].join(', ')}`
-          : undefined,
-  })
 }
