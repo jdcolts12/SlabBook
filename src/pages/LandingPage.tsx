@@ -208,7 +208,7 @@ export function LandingPage () {
   const [selectedTier, setSelectedTier] = useState<TierId>('pro')
 
   useEffect(() => {
-    document.title = 'SlabBook — Photos, AI identify & live card values'
+    document.title = 'SlabBook — Your graded cards, priced with real market data'
   }, [])
 
   function scrollToHow () {
