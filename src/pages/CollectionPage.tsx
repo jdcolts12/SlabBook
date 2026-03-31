@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { CardFormDialog, type CardFormSubmitPayload } from '../components/collection/CardFormDialog'
 import { CardImageModal } from '../components/collection/CardImageModal'
 import { CollectionGridView } from '../components/collection/CollectionGridView'
@@ -111,6 +111,7 @@ function filterCards (
 export function CollectionPage () {
   const location = useLocation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user, session } = useAuth()
   const { profile } = useUserProfile(user?.id)
   const [cards, setCards] = useState<Card[]>([])
@@ -131,6 +132,7 @@ export function CollectionPage () {
   const [imageModalCard, setImageModalCard] = useState<Card | null>(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [upgradeLoading, setUpgradeLoading] = useState(false)
+  const [scanModeOpen, setScanModeOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -252,7 +254,7 @@ export function CollectionPage () {
     setSortBy('value')
   }
 
-  function openAdd () {
+  function openAdd (opts?: { scan?: boolean }) {
     const cap = maxCardsForUser(profile)
     if (cards.length >= cap) {
       setUpgradeOpen(true)
@@ -260,14 +262,31 @@ export function CollectionPage () {
     }
     setDialogMode('add')
     setEditing(null)
+    setScanModeOpen(Boolean(opts?.scan))
     setDialogOpen(true)
   }
 
   function openEdit (c: Card) {
     setDialogMode('edit')
     setEditing(c)
+    setScanModeOpen(false)
     setDialogOpen(true)
   }
+
+  useEffect(() => {
+    if (loading) return
+    const wantsScan = searchParams.get('scan') === '1'
+    if (!wantsScan) return
+    openAdd({ scan: true })
+    const next = new URLSearchParams(searchParams)
+    next.delete('scan')
+    const welcomed = next.get('welcome') === '1'
+    if (welcomed) {
+      next.delete('welcome')
+      setToastMessage('Welcome to SlabBook! Start by scanning your first card.')
+    }
+    setSearchParams(next, { replace: true })
+  }, [loading, searchParams, setSearchParams])
 
   async function handleSubmit (submit: CardFormSubmitPayload) {
     if (!user) throw new Error('Not signed in.')
@@ -448,16 +467,26 @@ export function CollectionPage () {
             Portfolio, filters, and market values — switch between table and grid anytime.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openAdd}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Add card
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+          <button
+            type="button"
+            onClick={() => openAdd({ scan: true })}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slab-teal px-5 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-slab-teal/25 transition hover:bg-slab-teal-light sm:w-auto"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+            </svg>
+            Scan & Add Card
+          </button>
+          <button
+            type="button"
+            onClick={() => openAdd({ scan: false })}
+            className="text-xs text-zinc-400 hover:text-zinc-300"
+          >
+            Add manually instead
+          </button>
+        </div>
       </div>
 
       {loadError && (
@@ -485,21 +514,30 @@ export function CollectionPage () {
               />
             </svg>
           </div>
-          <h2 className="mt-8 text-xl font-semibold text-white">Start your slab collection</h2>
+          <h2 className="mt-8 text-2xl font-semibold text-white">Add your first card</h2>
           <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-zinc-400">
-            Add your first card to track purchase price, grading, and live comps. Your portfolio summary and
-            gain/loss will show up here automatically.
+            Take a photo and AI identifies it automatically.
           </p>
           <button
             type="button"
-            onClick={openAdd}
-            className="mt-10 inline-flex items-center justify-center gap-2 rounded-xl bg-slab-teal px-8 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/20 transition hover:bg-slab-teal-light"
+            onClick={() => openAdd({ scan: true })}
+            className="mt-10 inline-flex items-center justify-center gap-2 rounded-xl bg-slab-teal px-10 py-4 text-lg font-semibold text-zinc-950 shadow-lg shadow-slab-teal/25 transition hover:bg-slab-teal-light"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
             </svg>
-            Add your first card
+            Scan Your First Card
           </button>
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => openAdd({ scan: false })}
+              className="text-sm text-zinc-400 underline-offset-4 hover:text-zinc-300 hover:underline"
+            >
+              Add manually instead
+            </button>
+          </div>
         </div>
       ) : (
         <>
@@ -590,10 +628,12 @@ export function CollectionPage () {
       <CardFormDialog
         open={dialogOpen}
         mode={dialogMode}
+        scanMode={scanModeOpen}
         initial={editing}
         onClose={() => {
           setDialogOpen(false)
           setEditing(null)
+          setScanModeOpen(false)
         }}
         onSubmit={handleSubmit}
       />

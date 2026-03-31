@@ -234,18 +234,30 @@ export function DashboardHomePage () {
             Portfolio snapshot and AI value estimates — manage cards in Collection.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void estimateAllValues()}
-          disabled={refreshingValues || cards.length === 0}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
-        >
-          {refreshingValues && estimateProgress
-            ? `Estimating ${estimateProgress.current} of ${estimateProgress.total} cards…`
-            : refreshingValues
-              ? 'Working…'
-              : 'Estimate All Values'}
-        </button>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <Link
+            to="/dashboard/collection?scan=1"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slab-teal px-5 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-slab-teal/25 transition hover:bg-slab-teal-light sm:w-auto"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+            </svg>
+            Scan & Add
+          </Link>
+          <button
+            type="button"
+            onClick={() => void estimateAllValues()}
+            disabled={refreshingValues || cards.length === 0}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slab-teal/30 bg-slab-teal/10 px-4 py-2 text-sm font-semibold text-slab-teal-light transition hover:bg-slab-teal/20 disabled:opacity-50"
+          >
+            {refreshingValues && estimateProgress
+              ? `Estimating ${estimateProgress.current} of ${estimateProgress.total} cards…`
+              : refreshingValues
+                ? 'Working…'
+                : 'Estimate All Values'}
+          </button>
+        </div>
       </div>
 
       {error && (

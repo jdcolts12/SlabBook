@@ -10,6 +10,7 @@ import { PromoCodeInput } from '../promo/PromoCodeInput'
 
 const nav = [
   { to: '/dashboard', label: 'Dashboard', end: true },
+  { to: '/dashboard/collection?scan=1', label: 'Scan & Add', end: false },
   { to: '/dashboard/collection', label: 'Collection', end: false },
   { to: '/dashboard/market-values', label: 'Market Values', end: false },
   { to: '/dashboard/insights', label: 'AI Insights', end: false },
@@ -33,6 +34,13 @@ function NavIcon ({ name }: { name: (typeof nav)[number]['label'] }) {
       return (
         <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 11.25v7.5a2.25 2.25 0 01-2.25 2.25h-15A2.25 2.25 0 013 18.75v-7.5a2.25 2.25 0 012.25-2.25z" />
+        </svg>
+      )
+    case 'Scan & Add':
+      return (
+        <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
         </svg>
       )
     case 'Market Values':
@@ -217,9 +225,11 @@ export function DashboardLayout () {
             className={({ isActive }) =>
               [
                 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-slab-teal/10 text-slab-teal-light'
-                  : 'text-[var(--slab-text-muted)] hover:bg-white/5 hover:text-[var(--slab-text)]',
+                item.label === 'Scan & Add'
+                  ? 'bg-slab-teal text-zinc-950 hover:bg-slab-teal-light'
+                  : isActive
+                    ? 'bg-slab-teal/10 text-slab-teal-light'
+                    : 'text-[var(--slab-text-muted)] hover:bg-white/5 hover:text-[var(--slab-text)]',
               ].join(' ')
             }
           >
@@ -361,6 +371,16 @@ export function DashboardLayout () {
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
+        <Link
+          to="/dashboard/collection?scan=1"
+          className="fixed bottom-6 right-5 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-slab-teal text-zinc-950 shadow-xl shadow-black/40 transition hover:bg-slab-teal-light lg:hidden"
+          aria-label="Scan and add card"
+        >
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+          </svg>
+        </Link>
       </div>
     </div>
   )

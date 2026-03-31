@@ -88,7 +88,7 @@ export function SignupPage () {
           setInfo(`Account created. Promo: ${redeem.error}`)
         }
       }
-      navigate('/dashboard', { replace: true })
+      navigate('/dashboard/collection?scan=1&welcome=1', { replace: true })
     }
   }
 

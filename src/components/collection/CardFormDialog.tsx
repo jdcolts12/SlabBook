@@ -25,6 +25,7 @@ type CardFormDialogProps = {
   open: boolean
   mode: 'add' | 'edit'
   initial: Card | null
+  scanMode?: boolean
   onClose: () => void
   onSubmit: (payload: CardFormSubmitPayload) => Promise<void>
 }
@@ -127,10 +128,21 @@ function normalizeIdentifyYear (raw: string): string {
   return digits
 }
 
+function parseSerial (raw: string): { serial: string; total: string } | null {
+  const m = raw.trim().match(/^(\d{1,5})\s*\/\s*(\d{1,5})$/)
+  if (!m) return null
+  return { serial: m[1] ?? '', total: m[2] ?? '' }
+}
+
+function digitsOnly (raw: string): string {
+  return raw.replace(/\D/g, '').slice(0, 5)
+}
+
 export function CardFormDialog ({
   open,
   mode,
   initial,
+  scanMode = false,
   onClose,
   onSubmit,
 }: CardFormDialogProps) {
@@ -148,6 +160,9 @@ export function CardFormDialog ({
   const [identifyBanner, setIdentifyBanner] = useState<string | null>(null)
   const [identifying, setIdentifying] = useState(false)
   const [verifyLowConfidence, setVerifyLowConfidence] = useState(false)
+  const [serialMode, setSerialMode] = useState(false)
+  const [serialNo, setSerialNo] = useState('')
+  const [serialTotal, setSerialTotal] = useState('')
 
   useEffect(() => {
     if (!frontFile) {
@@ -188,6 +203,15 @@ export function CardFormDialog ({
       setPlayerInput(next.player_name)
     }
   }, [open, mode, initial])
+
+  useEffect(() => {
+    if (!open) return
+    const parsed = parseSerial(form.card_number)
+    if (!parsed) return
+    setSerialMode(true)
+    setSerialNo(parsed.serial)
+    setSerialTotal(parsed.total)
+  }, [open, form.card_number])
 
   const setOptions = useMemo(
     () => SETS_BY_SPORT[form.sport] ?? [],
@@ -352,7 +376,7 @@ export function CardFormDialog ({
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-5 py-4">
           <h2 id="card-form-title" className="text-lg font-semibold text-white">
-            {mode === 'add' ? 'Add card' : 'Edit card'}
+            {mode === 'add' ? (scanMode ? 'Scan & Add Card' : 'Add card') : 'Edit card'}
           </h2>
           <button
             type="button"
@@ -413,7 +437,7 @@ export function CardFormDialog ({
                     disabled={!canIdentify || saving || identifying}
                     className="rounded-lg border border-slab-teal/40 bg-slab-teal/10 px-3 py-2 text-sm font-medium text-slab-teal-muted transition hover:bg-slab-teal/20 disabled:opacity-50"
                   >
-                    {identifying ? 'Identifying…' : 'Auto-identify this card'}
+                    {identifying ? 'Scanning…' : (scanMode ? 'Scan & identify card' : 'Auto-identify this card')}
                   </button>
                 </div>
                 {identifyBanner && (
@@ -504,6 +528,57 @@ export function CardFormDialog ({
                       className={inputCls}
                       placeholder="#161"
                     />
+                    <label className="mt-2 inline-flex items-center gap-2 text-xs text-zinc-400">
+                      <input
+                        type="checkbox"
+                        checked={serialMode}
+                        onChange={(e) => {
+                          const checked = e.target.checked
+                          setSerialMode(checked)
+                          if (!checked) return
+                          const parsed = parseSerial(form.card_number)
+                          setSerialNo(parsed?.serial ?? '')
+                          setSerialTotal(parsed?.total ?? '')
+                        }}
+                        className="h-3.5 w-3.5 rounded border-zinc-600 bg-zinc-800 text-slab-teal focus:ring-slab-teal/30"
+                      />
+                      Numbered card format (x/y)
+                    </label>
+                    {serialMode && (
+                      <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                        <input
+                          value={serialNo}
+                          onChange={(e) => {
+                            const nextNo = digitsOnly(e.target.value)
+                            setSerialNo(nextNo)
+                            setForm((f) => ({
+                              ...f,
+                              card_number: nextNo || serialTotal ? `${nextNo}/${serialTotal}` : '',
+                            }))
+                          }}
+                          className={inputCls}
+                          inputMode="numeric"
+                          placeholder="12"
+                          aria-label="Card serial number"
+                        />
+                        <span className="text-zinc-500">/</span>
+                        <input
+                          value={serialTotal}
+                          onChange={(e) => {
+                            const nextTotal = digitsOnly(e.target.value)
+                            setSerialTotal(nextTotal)
+                            setForm((f) => ({
+                              ...f,
+                              card_number: serialNo || nextTotal ? `${serialNo}/${nextTotal}` : '',
+                            }))
+                          }}
+                          className={inputCls}
+                          inputMode="numeric"
+                          placeholder="99"
+                          aria-label="Card print run total"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -734,7 +809,7 @@ export function CardFormDialog ({
                   disabled={saving}
                   className="rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50"
                 >
-                  {saving ? 'Saving…' : mode === 'add' ? 'Add card' : 'Save changes'}
+                  {saving ? 'Saving…' : mode === 'add' ? (scanMode ? 'Scan & Add Card' : 'Add card') : 'Save changes'}
                 </button>
               </div>
             </div>

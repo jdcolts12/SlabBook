@@ -190,7 +190,7 @@ export function PricingSection ({
                   🏆 Founding Member — limited spots
                 </p>
                 <p className="mt-2 max-w-xl text-sm font-medium text-amber-50">
-                  Lock in Pro access forever for $49 — less than 10 months of Pro at $5/mo.
+                  Lock in Pro access forever for a one-time $49 payment.
                 </p>
                 <p className="mt-2 max-w-xl text-sm text-amber-200/90">
                   Same as Pro forever: unlimited cards, full AI, alerts, market values, trade tools, and tax export.
