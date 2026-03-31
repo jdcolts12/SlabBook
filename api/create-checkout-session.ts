@@ -66,6 +66,15 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
         ? process.env.STRIPE_PRICE_FOUNDING?.trim()
         : process.env.STRIPE_PRICE_PRO?.trim() ?? process.env.STRIPE_PRICE_COLLECTOR?.trim()
     if (!priceId) return res.status(500).json({ error: `Missing Stripe price env for tier: ${tierRaw}` })
+    if (tierRaw === 'founding') {
+      const proPrice = process.env.STRIPE_PRICE_PRO?.trim()
+      const collectorPrice = process.env.STRIPE_PRICE_COLLECTOR?.trim()
+      if (priceId === proPrice || priceId === collectorPrice) {
+        return res.status(500).json({
+          error: 'STRIPE_PRICE_FOUNDING is misconfigured (points to Pro price). Set it to the Founding price ID.',
+        })
+      }
+    }
 
     const { data: profile } = await admin.from('users').select('email, stripe_customer_id').eq('id', user.id).maybeSingle()
     const stripe = new Stripe(secret)
