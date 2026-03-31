@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { handleStripePortal } from '../server/stripeJsonHandlers'
 
 function safeJson500 (res: VercelResponse, message: string) {
   const r = res as VercelResponse & { headersSent?: boolean; writableEnded?: boolean }
@@ -8,7 +9,6 @@ function safeJson500 (res: VercelResponse, message: string) {
 
 export default async function handler (req: VercelRequest, res: VercelResponse) {
   try {
-    const { handleStripePortal } = await import('../server/stripeJsonHandlers')
     await handleStripePortal(req, res)
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Portal failed'

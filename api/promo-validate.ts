@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { handlePromoValidate } from '../server/promoRouteHandlers'
 
 function safeJson500 (res: VercelResponse, message: string) {
   const r = res as VercelResponse & { headersSent?: boolean; writableEnded?: boolean }
@@ -9,7 +10,6 @@ function safeJson500 (res: VercelResponse, message: string) {
 /** POST /api/promo-validate — avoids Vercel issues with /api/promo/[action] for some deployments. */
 export default async function handler (req: VercelRequest, res: VercelResponse) {
   try {
-    const { handlePromoValidate } = await import('../server/promoRouteHandlers')
     await handlePromoValidate(req, res)
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Promo validation failed'
