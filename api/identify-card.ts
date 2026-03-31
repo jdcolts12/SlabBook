@@ -264,7 +264,15 @@ async function handleIdentifyCard (req: ApiRequest, res: ApiResponse) {
     }),
   })
 
-  const anthropicJson = (await anthropicResponse.json()) as AnthropicMessageResponse
+  const anthropicBody = await anthropicResponse.text()
+  let anthropicJson: AnthropicMessageResponse
+  try {
+    anthropicJson = JSON.parse(anthropicBody) as AnthropicMessageResponse
+  } catch {
+    return res.status(502).json({
+      error: 'Card identification service returned an invalid response. Try again.',
+    })
+  }
 
   if (!anthropicResponse.ok) {
     const msg =
