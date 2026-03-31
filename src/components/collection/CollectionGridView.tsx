@@ -8,10 +8,13 @@ type Props = {
   cards: Card[]
   money: Intl.NumberFormat
   refreshingIds: Record<string, boolean>
+  estimateErrors?: Record<string, string | null>
   onRefresh: (c: Card) => void
   onEdit: (c: Card) => void
   onDelete: (c: Card) => void
   onViewImage: (c: Card) => void
+  isFreeUser?: boolean
+  onUpgradeRequest?: () => void
   showActions?: boolean
 }
 
@@ -19,10 +22,13 @@ export function CollectionGridView ({
   cards,
   money,
   refreshingIds,
+  estimateErrors = {},
   onRefresh,
   onEdit,
   onDelete,
   onViewImage,
+  isFreeUser = false,
+  onUpgradeRequest,
   showActions = true,
 }: Props) {
   return (
@@ -58,13 +64,19 @@ export function CollectionGridView ({
                 {showActions && (
                   <button
                     type="button"
-                    onClick={() => void onRefresh(c)}
+                    onClick={() => {
+                      if (isFreeUser && c.current_value == null) {
+                        onUpgradeRequest?.()
+                        return
+                      }
+                      void onRefresh(c)
+                    }}
                     disabled={Boolean(refreshingIds[c.id])}
                     className="shrink-0 rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-50"
-                    title="Refresh AI estimate"
-                    aria-label="Refresh AI estimate"
+                    title={c.current_value == null ? 'Get value' : 'Refresh AI estimate'}
+                    aria-label={c.current_value == null ? 'Get value' : 'Refresh AI estimate'}
                   >
-                    {refreshingIds[c.id] ? '…' : '↻'}
+                    {refreshingIds[c.id] ? '…' : c.current_value == null ? '◎' : '↻'}
                   </button>
                 )}
               </div>
@@ -76,6 +88,27 @@ export function CollectionGridView ({
                 <div className="mt-1 text-2xl font-bold tabular-nums leading-tight text-white">
                   <CardValueDisplay card={c} money={money} align="left" showDisclaimer={false} />
                 </div>
+                {showActions && c.current_value == null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isFreeUser) {
+                        onUpgradeRequest?.()
+                        return
+                      }
+                      void onRefresh(c)
+                    }}
+                    disabled={Boolean(refreshingIds[c.id])}
+                    className="mt-2 rounded-lg border border-zinc-600/80 bg-zinc-800/40 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-zinc-700/40 disabled:opacity-50"
+                  >
+                    {refreshingIds[c.id] ? 'Searching sales…' : 'Get Value'}
+                  </button>
+                )}
+                {estimateErrors[c.id] && (
+                  <p className="mt-1 text-[11px] text-red-400">
+                    Unable to find comps. Retry.
+                  </p>
+                )}
               </div>
               <div className="mt-3 border-t border-[var(--color-border-subtle)] pt-3">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Gain / loss</p>

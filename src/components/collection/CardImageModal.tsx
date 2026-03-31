@@ -1,13 +1,30 @@
 import { useEffect, useState } from 'react'
 import type { Card } from '../../types/card'
+import { cardGainDollars, cardGainPercent, formatGradeLine } from '../../lib/cardMetrics'
+import { pctFormatter } from '../../lib/formatters'
+import { CardValueDisplay } from './CardValueDisplay'
 
 type Props = {
   card: Card | null
   open: boolean
   onClose: () => void
+  money: Intl.NumberFormat
+  refreshing?: boolean
+  isFreeUser?: boolean
+  onRefreshValue?: (card: Card) => void
+  onUpgrade?: () => void
 }
 
-export function CardImageModal ({ card, open, onClose }: Props) {
+export function CardImageModal ({
+  card,
+  open,
+  onClose,
+  money,
+  refreshing = false,
+  isFreeUser = false,
+  onRefreshValue,
+  onUpgrade,
+}: Props) {
   const [side, setSide] = useState<'front' | 'back'>('front')
 
   useEffect(() => {
@@ -35,6 +52,8 @@ export function CardImageModal ({ card, open, onClose }: Props) {
   const back = card.image_back_url?.trim() || null
   const url = side === 'front' ? front : back
   const hasBoth = Boolean(front && back)
+  const gain = cardGainDollars(card)
+  const gainPct = cardGainPercent(card)
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-8">
@@ -48,7 +67,7 @@ export function CardImageModal ({ card, open, onClose }: Props) {
         role="dialog"
         aria-modal
         aria-label="Card photos"
-        className="relative z-10 flex max-h-[min(92dvh,900px)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] shadow-2xl"
+        className="relative z-10 flex max-h-[min(92dvh,900px)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-4 py-3">
           <div className="min-w-0">
@@ -94,16 +113,79 @@ export function CardImageModal ({ card, open, onClose }: Props) {
             </button>
           </div>
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center bg-black/40 p-4">
-          {url ? (
-            <img
-              src={url}
-              alt={side === 'front' ? 'Front of card' : 'Back of card'}
-              className="max-h-[min(75dvh,720px)] w-auto max-w-full rounded-lg object-contain shadow-lg"
-            />
-          ) : (
-            <p className="text-sm text-zinc-500">No {side} photo on file.</p>
-          )}
+        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[1.2fr_0.9fr]">
+          <div className="flex min-h-0 items-center justify-center bg-black/40 p-4">
+            {url ? (
+              <img
+                src={url}
+                alt={side === 'front' ? 'Front of card' : 'Back of card'}
+                className="max-h-[min(75dvh,720px)] w-auto max-w-full rounded-lg object-contain shadow-lg"
+              />
+            ) : (
+              <p className="text-sm text-zinc-500">No {side} photo on file.</p>
+            )}
+          </div>
+          <div className="overflow-y-auto border-t border-[var(--color-border-subtle)] bg-[var(--color-surface)]/60 p-4 lg:border-l lg:border-t-0">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Card details</h3>
+            <div className="mt-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-3">
+              <p className="text-xs text-zinc-500">{[card.year, card.set_name].filter(Boolean).join(' · ') || 'Card'}</p>
+              <p className="mt-1 text-lg font-semibold text-white">{card.player_name}</p>
+              <p className="mt-1 text-xs text-zinc-400">{formatGradeLine(card)}</p>
+              {card.card_number && <p className="mt-1 text-xs text-zinc-500">Card #: {card.card_number}</p>}
+              {card.variation && <p className="mt-1 text-xs text-zinc-500">Variation: {card.variation}</p>}
+            </div>
+
+            <div className="mt-4 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Current value estimate</p>
+              {isFreeUser && card.current_value == null ? (
+                <div className="mt-2">
+                  <p className="select-none text-2xl font-bold tracking-wide text-zinc-500 blur-[2px]">$0,000</p>
+                  <p className="mt-1 text-xs text-zinc-400">Unlock instant valuations — Upgrade to Pro $5/mo</p>
+                  <button
+                    type="button"
+                    onClick={onUpgrade}
+                    className="mt-2 rounded-lg bg-slab-teal px-3 py-2 text-xs font-semibold text-zinc-950 hover:bg-slab-teal-light"
+                  >
+                    Upgrade to Pro
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="mt-1 text-xl font-bold">
+                    <CardValueDisplay card={card} money={money} showDisclaimer={false} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRefreshValue?.(card)}
+                    disabled={refreshing}
+                    className="mt-2 rounded-lg border border-slab-teal/30 bg-slab-teal/10 px-3 py-2 text-xs font-semibold text-slab-teal-light hover:bg-slab-teal/20 disabled:opacity-50"
+                  >
+                    {refreshing ? 'Searching sales…' : (card.current_value == null ? 'Get Value' : 'Refresh Value')}
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-3 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Gain / loss</p>
+              {gain != null ? (
+                <p className={['mt-1 font-semibold', gain >= 0 ? 'text-slab-teal' : 'text-red-400'].join(' ')}>
+                  {gain >= 0 ? '+' : ''}{money.format(gain)}
+                  {gainPct != null && <span className="ml-1 text-xs text-zinc-500">({pctFormatter.format(gainPct / 100)})</span>}
+                </p>
+              ) : (
+                <p className="mt-1 text-zinc-500">No purchase price yet.</p>
+              )}
+              <a
+                href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${card.player_name} ${card.year ?? ''} ${card.set_name ?? ''} ${card.card_number ?? ''}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-block text-xs font-medium text-slab-teal hover:text-slab-teal-light"
+              >
+                View recent comps
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </div>

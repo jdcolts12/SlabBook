@@ -345,6 +345,9 @@ export function DashboardHomePage () {
         card={imageModalCard}
         open={imageModalCard != null}
         onClose={() => setImageModalCard(null)}
+        money={money}
+        refreshing={Boolean(imageModalCard && refreshingIds[imageModalCard.id])}
+        onRefreshValue={(c) => void refreshSingleCardValue(c)}
       />
     </div>
   )

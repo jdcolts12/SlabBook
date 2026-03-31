@@ -786,6 +786,9 @@ export function MarketValuesPage () {
         card={imageModalCard}
         open={imageModalCard != null}
         onClose={() => setImageModalCard(null)}
+        money={money}
+        refreshing={Boolean(imageModalCard && refreshingIds[imageModalCard.id])}
+        onRefreshValue={(c) => void refreshSingle(c)}
       />
     </div>
   )

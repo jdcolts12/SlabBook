@@ -9,10 +9,13 @@ type Props = {
   cards: Card[]
   money: Intl.NumberFormat
   refreshingIds: Record<string, boolean>
+  estimateErrors?: Record<string, string | null>
   onRefresh: (c: Card) => void
   onEdit: (c: Card) => void
   onDelete: (c: Card) => void
   onViewImage: (c: Card) => void
+  isFreeUser?: boolean
+  onUpgradeRequest?: () => void
   showActions?: boolean
 }
 
@@ -63,10 +66,13 @@ export function CollectionTableView ({
   cards,
   money,
   refreshingIds,
+  estimateErrors = {},
   onRefresh,
   onEdit,
   onDelete,
   onViewImage,
+  isFreeUser = false,
+  onUpgradeRequest,
   showActions = true,
 }: Props) {
   return (
@@ -117,6 +123,25 @@ export function CollectionTableView ({
                 </td>
                 <td className="min-w-[200px] px-3 py-3 text-right lg:px-4">
                   <CardValueDisplay card={c} money={money} align="right" compactDisclaimer />
+                  {c.current_value == null && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isFreeUser) {
+                          onUpgradeRequest?.()
+                          return
+                        }
+                        void onRefresh(c)
+                      }}
+                      disabled={Boolean(refreshingIds[c.id])}
+                      className="mt-1 rounded-md border border-zinc-600/80 bg-zinc-800/40 px-2 py-1 text-[11px] font-semibold text-zinc-300 transition hover:bg-zinc-700/40 disabled:opacity-50"
+                    >
+                      {refreshingIds[c.id] ? 'Searching sales…' : 'Get Value'}
+                    </button>
+                  )}
+                  {estimateErrors[c.id] && (
+                    <p className="mt-1 text-[11px] text-red-400">Unable to find comps. Retry.</p>
+                  )}
                 </td>
                 <td className="px-3 py-3 lg:px-4">
                   <GainCell c={c} money={money} />
@@ -128,7 +153,13 @@ export function CollectionTableView ({
                   <td className="whitespace-nowrap px-3 py-3 text-right lg:px-4">
                     <button
                       type="button"
-                      onClick={() => void onRefresh(c)}
+                      onClick={() => {
+                        if (isFreeUser && c.current_value == null) {
+                          onUpgradeRequest?.()
+                          return
+                        }
+                        void onRefresh(c)
+                      }}
                       disabled={Boolean(refreshingIds[c.id])}
                       className="mr-1 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
                       title="Refresh AI estimate"

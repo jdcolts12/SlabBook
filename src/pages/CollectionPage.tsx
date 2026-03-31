@@ -30,7 +30,7 @@ import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
 import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
 import { getCardValue } from '../lib/pricing-service'
 import { createCheckoutSession } from '../lib/stripeApi'
-import { maxCardsForUser } from '../lib/tierLimits'
+import { effectiveTier, maxCardsForUser } from '../lib/tierLimits'
 import type { Card } from '../types/card'
 
 const money = moneyFormatter
@@ -118,6 +118,7 @@ export function CollectionPage () {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshingIds, setRefreshingIds] = useState<Record<string, boolean>>({})
+  const [estimateErrors, setEstimateErrors] = useState<Record<string, string | null>>({})
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add')
@@ -133,6 +134,7 @@ export function CollectionPage () {
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [upgradeLoading, setUpgradeLoading] = useState(false)
   const [scanModeOpen, setScanModeOpen] = useState(false)
+  const [postAdd, setPostAdd] = useState<{ cardId: string; estimating: boolean; done: boolean } | null>(null)
 
   useEffect(() => {
     try {
@@ -236,6 +238,8 @@ export function CollectionPage () {
   }, [cards])
 
   const portfolioMetrics = useMemo(() => computePortfolioMetrics(cards), [cards])
+  const currentTier = effectiveTier(profile)
+  const isFreeUser = currentTier === 'free'
 
   const filteredCards = useMemo(
     () => filterCards(cards, sport, gradeFilter, gradingCompany),
@@ -358,7 +362,16 @@ export function CollectionPage () {
 
       setToastMessage('Card added to your collection.')
       await loadCards({ silent: true })
-      void estimateCard(row as Card, { forceRefresh: true })
+      const added = row as Card
+      if (isFreeUser) {
+        setPostAdd({ cardId: added.id, estimating: false, done: false })
+      } else {
+        setPostAdd({ cardId: added.id, estimating: true, done: false })
+        void (async () => {
+          await estimateCard(added, { forceRefresh: true })
+          setPostAdd({ cardId: added.id, estimating: false, done: true })
+        })()
+      }
       return
     }
 
@@ -403,6 +416,7 @@ export function CollectionPage () {
 
   async function estimateCard (card: Card, opts?: { forceRefresh?: boolean }) {
     setLoadError(null)
+    setEstimateErrors((prev) => ({ ...prev, [card.id]: null }))
     setRefreshingIds((prev) => ({ ...prev, [card.id]: true }))
     try {
       const {
@@ -419,7 +433,9 @@ export function CollectionPage () {
       }
       setCards((prev) => prev.map((entry) => (entry.id === card.id ? mergeEstimateIntoCard(entry, est) : entry)))
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Unable to estimate value.')
+      const msg = err instanceof Error ? err.message : 'Unable to estimate value.'
+      setLoadError(msg)
+      setEstimateErrors((prev) => ({ ...prev, [card.id]: msg }))
     } finally {
       setRefreshingIds((prev) => {
         const next = { ...prev }
@@ -459,6 +475,67 @@ export function CollectionPage () {
     <div className="mx-auto max-w-6xl space-y-6">
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      )}
+      {postAdd && (
+        <div className="rounded-xl border border-slab-teal/30 bg-slab-teal/10 p-4">
+          {isFreeUser ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold text-slab-teal-light">Card added! Upgrade to Pro to get an instant AI market value estimate.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUpgradeOpen(true)}
+                  className="rounded-lg bg-slab-teal px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light"
+                >
+                  Upgrade to Pro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPostAdd(null)}
+                  className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+                >
+                  View Collection
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold text-slab-teal-light">Card added! Get your instant value estimate.</p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {postAdd.estimating ? 'Searching recent sales...' : postAdd.done ? 'Estimate complete.' : 'Ready to estimate.'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={postAdd.estimating}
+                  onClick={() => {
+                    const c = cards.find((x) => x.id === postAdd.cardId)
+                    if (!c) return
+                    setPostAdd((p) => (p ? { ...p, estimating: true } : p))
+                    void (async () => {
+                      await estimateCard(c, { forceRefresh: true })
+                      setPostAdd((p) => (p ? { ...p, estimating: false, done: true } : p))
+                    })()
+                  }}
+                  className="rounded-lg bg-slab-teal px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50"
+                >
+                  {postAdd.estimating ? 'Searching sales...' : 'Get Estimate Now'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPostAdd(null)}
+                  className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+                >
+                  View in Collection
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -583,20 +660,26 @@ export function CollectionPage () {
               cards={visibleCards}
               money={money}
               refreshingIds={refreshingIds}
+              estimateErrors={estimateErrors}
               onRefresh={refreshSingleCardValue}
               onEdit={openEdit}
               onDelete={handleDelete}
               onViewImage={setImageModalCard}
+              isFreeUser={isFreeUser}
+              onUpgradeRequest={() => setUpgradeOpen(true)}
             />
           ) : (
             <CollectionGridView
               cards={visibleCards}
               money={money}
               refreshingIds={refreshingIds}
+              estimateErrors={estimateErrors}
               onRefresh={refreshSingleCardValue}
               onEdit={openEdit}
               onDelete={handleDelete}
               onViewImage={setImageModalCard}
+              isFreeUser={isFreeUser}
+              onUpgradeRequest={() => setUpgradeOpen(true)}
             />
           )}
         </>
@@ -642,6 +725,11 @@ export function CollectionPage () {
         card={imageModalCard}
         open={imageModalCard != null}
         onClose={() => setImageModalCard(null)}
+        money={money}
+        refreshing={Boolean(imageModalCard && refreshingIds[imageModalCard.id])}
+        isFreeUser={isFreeUser}
+        onRefreshValue={(c) => void refreshSingleCardValue(c)}
+        onUpgrade={() => setUpgradeOpen(true)}
       />
     </div>
   )
