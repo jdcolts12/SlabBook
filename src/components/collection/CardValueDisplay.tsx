@@ -25,7 +25,7 @@ function ConfidenceBadge ({ confidence }: { confidence: string | null }) {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-300/90">
         <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden />
-        Est. value
+        Medium confidence
       </span>
     )
   }
@@ -88,15 +88,14 @@ export function CardValueDisplay ({
         <ConfidenceBadge confidence={card.confidence} />
       </div>
       {note && (
-        <p className="mt-1 max-w-[220px] text-[10px] leading-snug text-zinc-500 sm:max-w-none">
-          <span
-            className="cursor-help border-b border-dotted border-zinc-600"
-            tabIndex={0}
-            title={note}
-          >
-            Hover to see why
-          </span>
-        </p>
+        <details className="mt-1 max-w-[min(100%,20rem)] text-[10px] leading-snug text-zinc-500 sm:max-w-none">
+          <summary className="cursor-pointer list-none text-zinc-400 marker:content-none [&::-webkit-details-marker]:hidden">
+            <span className="border-b border-dotted border-zinc-600 text-zinc-400 hover:text-zinc-300">
+              How we estimated this
+            </span>
+          </summary>
+          <p className="mt-1.5 pl-0 text-left text-zinc-500">{note}</p>
+        </details>
       )}
       <p className="mt-1 text-[10px] text-zinc-600">{formatLastUpdatedLine(card.last_updated)}</p>
       {card.pricing_source === 'demo_mode' && (
