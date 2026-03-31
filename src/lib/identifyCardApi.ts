@@ -15,6 +15,19 @@ export type IdentifyCardResponse = {
   error?: string
 }
 
+function friendlyNonJsonError (raw: string, status: number): string {
+  const s = raw.trim()
+  if (
+    /FUNCTION_INVOCATION_FAILED|A server error has occurred|502:\s*Bad Gateway/i.test(
+      s,
+    )
+  ) {
+    return 'Card identification is temporarily unavailable. Please try again in a moment.'
+  }
+  if (s.length > 0 && s.length < 280) return s
+  return `Identify failed (HTTP ${status})`
+}
+
 export async function identifyCardFromImage (
   imageBase64: string,
   mediaType: 'image/jpeg' | 'image/png' | 'image/webp',
@@ -28,9 +41,17 @@ export async function identifyCardFromImage (
     },
     body: JSON.stringify({ image_base64: imageBase64, media_type: mediaType }),
   })
-  const data = (await res.json()) as IdentifyCardResponse & { error?: string }
+
+  const raw = await res.text()
+  let data: IdentifyCardResponse & { error?: string }
+  try {
+    data = raw ? (JSON.parse(raw) as typeof data) : {}
+  } catch {
+    return { error: friendlyNonJsonError(raw, res.status) }
+  }
+
   if (!res.ok) {
-    return { error: data.error ?? `Identify failed (${res.status})` }
+    return { error: data.error ?? friendlyNonJsonError(raw, res.status) }
   }
   return data
 }

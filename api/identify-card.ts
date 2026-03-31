@@ -142,6 +142,15 @@ function getJson (body: unknown): Record<string, unknown> {
 }
 
 export default async function handler (req: ApiRequest, res: ApiResponse) {
+  try {
+    return await handleIdentifyCard(req, res)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unexpected error'
+    return res.status(500).json({ error: msg })
+  }
+}
+
+async function handleIdentifyCard (req: ApiRequest, res: ApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
