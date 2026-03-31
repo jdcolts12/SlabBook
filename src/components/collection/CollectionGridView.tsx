@@ -34,6 +34,7 @@ export function CollectionGridView ({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {cards.map((c) => {
+        const estErr = estimateErrors[c.id]
         const d = cardGainDollars(c)
         const p = cardGainPercent(c)
         const gainPositive = d != null && d >= 0
@@ -104,9 +105,9 @@ export function CollectionGridView ({
                     {refreshingIds[c.id] ? 'Searching sales…' : 'Get Value'}
                   </button>
                 )}
-                {estimateErrors[c.id] && (
-                  <p className="mt-1 text-[11px] text-red-400">
-                    Unable to find comps. Retry.
+                {estErr && (
+                  <p className="mt-1 text-[11px] leading-snug text-red-400 break-words" title={estErr}>
+                    {estErr.length > 220 ? `${estErr.slice(0, 220)}…` : estErr}
                   </p>
                 )}
               </div>

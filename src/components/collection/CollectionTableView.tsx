@@ -98,7 +98,9 @@ export function CollectionTableView ({
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border-subtle)]">
-            {cards.map((c) => (
+            {cards.map((c) => {
+              const estErr = estimateErrors[c.id]
+              return (
               <tr key={c.id} className="text-zinc-200 hover:bg-white/[0.03]">
                 <td className="px-2 py-2 align-middle lg:px-3">
                   <CardThumbnail
@@ -139,8 +141,13 @@ export function CollectionTableView ({
                       {refreshingIds[c.id] ? 'Searching sales…' : 'Get Value'}
                     </button>
                   )}
-                  {estimateErrors[c.id] && (
-                    <p className="mt-1 text-[11px] text-red-400">Unable to find comps. Retry.</p>
+                  {estErr && (
+                    <p
+                      className="mt-1 max-w-[min(100%,18rem)] text-left text-[11px] leading-snug text-red-400 break-words"
+                      title={estErr}
+                    >
+                      {estErr.length > 220 ? `${estErr.slice(0, 220)}…` : estErr}
+                    </p>
                   )}
                 </td>
                 <td className="px-3 py-3 lg:px-4">
@@ -184,7 +191,8 @@ export function CollectionTableView ({
                   </td>
                 )}
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
