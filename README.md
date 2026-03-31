@@ -71,3 +71,13 @@ export default defineConfig([
   },
 ])
 ```
+
+## Supabase confirmation email template
+
+- A branded confirmation template is available at `supabase/email-templates/confirm-signup.html`.
+- In Supabase Dashboard:
+  - Authentication -> Email Templates -> Confirm signup
+  - Paste the HTML template content.
+- In Supabase Dashboard -> Authentication -> URL Configuration, make sure your redirect URLs include:
+  - `https://<your-domain>/auth/callback`
+  - `http://localhost:5173/auth/callback` (for local dev)

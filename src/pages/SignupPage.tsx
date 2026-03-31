@@ -47,8 +47,9 @@ export function SignupPage () {
       return
     }
     setSubmitting(true)
-    // Must match an entry in Supabase → Authentication → Redirect URLs (e.g. /dashboard or /auth/callback).
-    const redirectTo = `${window.location.origin}/dashboard`
+    // Must match an entry in Supabase -> Authentication -> Redirect URLs.
+    // Using /auth/callback lets PKCE finalize reliably, then route to /dashboard.
+    const redirectTo = `${window.location.origin}/auth/callback`
     const { data, error: signError } = await supabase.auth.signUp({
       email,
       password,
@@ -60,7 +61,7 @@ export function SignupPage () {
       return
     }
     if (data.user && !data.session) {
-      setInfo('Check your email to confirm your account, then sign in.')
+      setInfo('Check your email to confirm your account. After verification, you will be redirected to your dashboard.')
       return
     }
     if (data.session) {
