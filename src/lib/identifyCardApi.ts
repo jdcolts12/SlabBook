@@ -17,6 +17,9 @@ export type IdentifyCardResponse = {
 
 function friendlyNonJsonError (raw: string, status: number): string {
   const s = raw.trim()
+  if (status === 413 || /413|payload too large|request entity too large/i.test(s)) {
+    return 'Photo is too large for the server. Try again with a smaller image or retake the photo.'
+  }
   if (
     /FUNCTION_INVOCATION_FAILED|A server error has occurred|502:\s*Bad Gateway/i.test(
       s,
