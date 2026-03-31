@@ -82,7 +82,12 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
     }
 
     const origin = appOrigin()
-    const mode: Stripe.Checkout.SessionCreateParams.Mode = tierRaw === 'founding' ? 'payment' : 'subscription'
+    let mode: Stripe.Checkout.SessionCreateParams.Mode = 'subscription'
+    if (tierRaw === 'founding') {
+      // Support both one-time and recurring founding prices from env.
+      const price = await stripe.prices.retrieve(priceId)
+      mode = price.type === 'one_time' ? 'payment' : 'subscription'
+    }
     const params: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       success_url: `${origin}/dashboard?upgrade=success`,
