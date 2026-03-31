@@ -48,7 +48,7 @@ export function SignupPage () {
     }
     setSubmitting(true)
     // Must match an entry in Supabase -> Authentication -> Redirect URLs.
-    // Using /auth/callback lets PKCE finalize reliably, then route to /dashboard.
+    // Using /auth/callback lets email confirmation return here; implicit flow completes on any device.
     const redirectTo = `${window.location.origin}/auth/callback`
     const { data, error: signError } = await supabase.auth.signUp({
       email,

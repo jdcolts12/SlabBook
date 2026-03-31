@@ -16,7 +16,11 @@ export const supabase = createClient(url ?? '', anonKey ?? '', {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    // Must match GoTrue email/OAuth links (PKCE uses ?code=). Implicit-only clients fail on confirm links.
-    flowType: 'pkce',
+    /**
+     * Default is `implicit` — email confirmation puts tokens in the URL hash so the link works on
+     * any device. `pkce` requires a code verifier in the *same* browser as signup; if exchange fails,
+     * Supabase keeps the previous session, so testers stayed logged in and new users saw the wrong account.
+     */
+    flowType: 'implicit',
   },
 })
