@@ -35,7 +35,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
     const tier = typeof body.tier === 'string' ? body.tier.trim().toLowerCase() : ''
     if (!code) return res.status(400).json({ error: 'Code not found' })
 
-    const { data: row, error: promoErr } = await admin.from('promo_codes').select('*').eq('code', code).maybeSingle()
+    const { data: row, error: promoErr } = await admin.from('promo_codes').select('*').ilike('code', code).maybeSingle()
     if (promoErr || !row) return res.status(400).json({ error: 'Code not found' })
     const promo = row as {
       id: string; code: string; type: string; value: number | null; applicable_tier: string; max_uses: number | null; uses_count: number; expires_at: string | null; is_active: boolean

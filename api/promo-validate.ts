@@ -26,7 +26,7 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
     const userId = typeof body.user_id === 'string' ? body.user_id : null
     if (!code) return res.status(200).json({ valid: false, error: 'Code not found' })
 
-    const { data: row, error } = await admin.from('promo_codes').select('*').eq('code', code).maybeSingle()
+    const { data: row, error } = await admin.from('promo_codes').select('*').ilike('code', code).maybeSingle()
     if (error || !row) return res.status(200).json({ valid: false, error: 'Code not found' })
     const promo = row as {
       id: string; type: string; value: number | null; applicable_tier: string; max_uses: number | null; uses_count: number; expires_at: string | null; is_active: boolean

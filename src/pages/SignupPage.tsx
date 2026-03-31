@@ -57,9 +57,26 @@ export function SignupPage () {
     })
     setSubmitting(false)
     if (signError) {
-      setError(signError.message)
+      const lower = signError.message.toLowerCase()
+      if (lower.includes('already') || lower.includes('registered') || lower.includes('exists')) {
+        setError('An account with this email already exists. Sign in or reset your password.')
+      } else {
+        setError(signError.message)
+      }
       return
     }
+
+    // Supabase can return a user with no identities for an already-registered email.
+    const alreadyRegistered =
+      Boolean(data.user) &&
+      !data.session &&
+      Array.isArray(data.user?.identities) &&
+      data.user.identities.length === 0
+    if (alreadyRegistered) {
+      setError('An account with this email already exists. Sign in or reset your password.')
+      return
+    }
+
     if (data.user && !data.session) {
       setInfo('Check your email to confirm your account. After verification, you will be redirected to your dashboard.')
       return
@@ -140,9 +157,23 @@ export function SignupPage () {
         </details>
 
         {error && (
-          <p className="text-sm text-red-400" role="alert">
-            {error}
-          </p>
+          <div role="alert">
+            <p className="text-sm text-red-400">{error}</p>
+            {error.toLowerCase().includes('already exists') && (
+              <p className="mt-2 text-xs text-zinc-400">
+                <Link to="/login" className="font-medium text-slab-teal hover:text-slab-teal-light">
+                  Sign in
+                </Link>{' '}
+                or{' '}
+                <Link
+                  to="/login?mode=reset"
+                  className="font-medium text-slab-teal hover:text-slab-teal-light"
+                >
+                  forgot password?
+                </Link>
+              </p>
+            )}
+          </div>
         )}
         {info && (
           <p className="text-sm text-slab-teal-light" role="status">
