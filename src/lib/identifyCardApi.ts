@@ -1,11 +1,16 @@
 export type IdentifyConfidence = 'high' | 'medium' | 'low'
 
+/** From identify API — drives labels and whether league/sport applies. */
+export type DetectedCardKind = 'sports' | 'pokemon_tcg' | 'other_tcg'
+
 export type IdentifyCardResponse = {
+  card_type?: DetectedCardKind
   player_name?: string
   year?: string
   set_name?: string
   card_number?: string
   variation?: string
+  /** Only when card_type is sports */
   sport?: string
   grading_company?: string | null
   grade?: string | null

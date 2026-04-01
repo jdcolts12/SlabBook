@@ -1,6 +1,9 @@
+import type { DetectedCardKind } from './identifyCardApi'
 import type { Sport } from '../data/sports'
 
 export type CardFormValues = {
+  /** From scan identify, or sports for manual add / edit. */
+  detected_card_kind: DetectedCardKind
   sport: Sport
   player_name: string
   year: string
@@ -29,8 +32,14 @@ export function variationFromFormValues (f: CardFormValues): string | null {
 }
 
 export function validateCardForm (f: CardFormValues): string | null {
-  if (!f.sport) return 'Select a sport.'
-  if (!f.player_name.trim()) return 'Player name is required.'
+  if (f.detected_card_kind === 'sports') {
+    if (!f.sport) return 'Select a sport.'
+  }
+  if (!f.player_name.trim()) {
+    return f.detected_card_kind === 'sports'
+      ? 'Player name is required.'
+      : 'Name on card is required.'
+  }
   if (f.is_graded) {
     if (!f.grading_company) return 'Select a grading company.'
     if (!f.grade) return 'Select a grade.'

@@ -11,6 +11,7 @@ function isDemoMode (): boolean {
 
 function fakeIdentifyPayload (): Record<string, unknown> {
   return {
+    card_type: 'sports',
     player_name: 'Demo Player',
     year: '2020',
     set_name: 'Demo Set',
@@ -145,57 +146,43 @@ type AnthropicMessageResponse = {
   error?: { message?: string }
 }
 
-const IDENTIFY_PROMPT = `You are the world's most accurate sports trading card identification expert.
-You have encyclopedic knowledge of every sports card set ever produced for NFL, NBA, MLB, NHL, and Pokemon.
+const IDENTIFY_PROMPT = `You identify trading cards from photos: US sports (NFL, NBA, MLB, NHL), Pokémon TCG, and other TCG.
 
-When analyzing a card image you must:
-1. Look for the PLAYER NAME printed on the card.
-2. Look for the YEAR printed on the card front, back, or card number area.
-3. Identify the SET by card design, logo, borders, and visual style:
-   - Prizm: chrome finish, prizm pattern borders
-   - Optic: similar to Prizm but Donruss branding
-   - Topps Chrome: chrome finish, Topps logo
-   - Bowman Chrome: prospect-focused chrome design
-   - Select: tiered design with colored stripes
-   - Mosaic: mosaic tile pattern background
-4. Look for CARD NUMBER, usually on back or lower front corner.
-5. Identify VARIATION from visual cues:
-   - Silver/Base: standard chrome look
-   - Holo: holographic pattern
-   - Numbered: /25, /10, /1 stamps
-   - Color variations: Gold, Red, Blue, Green
-   - Rookie: RC logo or Rookie text
-6. If card is in a PSA slab:
-   - Read the PSA label carefully
-   - Extract exact grade (1-10)
-   - Extract certification number
-   - Extract year and set from label text
-7. If card is in a BGS slab:
-   - Read the BGS label and subgrades if visible
-   - Extract exact final grade
-   - Extract year, set, player, and card number from label text
+First decide card_type:
+- "sports" — athlete on a licensed US sports card (football, basketball, baseball, hockey).
+- "pokemon_tcg" — Pokémon (Pokémon Company), Pikachu, Charizard, Japanese Pokémon frames, Poké Ball motifs, etc.
+- "other_tcg" — Magic, Yu-Gi-Oh, Lorcana, etc. (not Pokémon, not US sports).
+
+When analyzing the image:
+1. For sports: the subject is the PLAYER NAME. For Pokémon/TCG: the subject is the CHARACTER or card name on the card (put it in player_name for JSON compatibility).
+2. YEAR if visible on front, back, or slab label.
+3. SET: design, logos, expansion name, or slab label text.
+4. CARD NUMBER if visible.
+5. VARIATION: holo, full art, alt art, numbered /xx, rookie, parallel color, etc.
+6. Graded slabs (PSA, BGS, CGC, SGC, etc.): read company, grade, cert/year/set from label when visible.
 
 Output requirements:
 - Return ONLY valid JSON (no markdown, no explanation).
-- If uncertain, provide best estimate and lower confidence.
-- Do not invent details that are not visible.
-- Keep unknown fields as empty string, or null for grading_company/grade.
-- For notes, include slab label details (such as cert number or subgrades) and any ambiguity.
-- sport must be one of NFL, NBA, MLB, NHL. If unclear, infer from visible cues and set confidence accordingly.
+- If uncertain, best estimate and lower confidence.
+- Do not invent invisible details. Unknown strings: "". grading_company/grade: null when unknown.
+- card_type is required: exactly "sports" | "pokemon_tcg" | "other_tcg".
+- When card_type is "sports", sport must be one of NFL, NBA, MLB, NHL (infer from logos/uniforms/set if needed).
+- When card_type is "pokemon_tcg" or "other_tcg", set sport to "" (empty string) — never put NFL/NBA/MLB/NHL on non-sports cards.
 
 Return ONLY this JSON object:
 {
+  "card_type": "sports" | "pokemon_tcg" | "other_tcg",
   "player_name": "<string>",
   "year": "<string>",
   "set_name": "<string>",
   "card_number": "<string>",
   "variation": "<string>",
-  "sport": "<NFL|NBA|MLB|NHL>",
+  "sport": "<NFL|NBA|MLB|NHL or empty string when not sports>",
   "grading_company": "<string or null>",
   "grade": "<string or null>",
   "is_graded": <boolean>,
   "confidence": "<high|medium|low>",
-  "notes": "<any other relevant details>"
+  "notes": "<slab details, ambiguity>"
 }`
 
 function getBearerToken (authHeader?: string): string | null {
@@ -233,6 +220,15 @@ function normalizeSport (raw: string | undefined): string | undefined {
   if (u.includes('BASEBALL')) return 'MLB'
   if (u.includes('HOCKEY')) return 'NHL'
   return undefined
+}
+
+type IdentifyCardType = 'sports' | 'pokemon_tcg' | 'other_tcg'
+
+function normalizeCardType (v: unknown): IdentifyCardType {
+  const s = (asStr(v) ?? '').trim().toLowerCase().replace(/\s+/g, '_')
+  if (s === 'pokemon_tcg' || s === 'pokemon' || s.startsWith('pokemon')) return 'pokemon_tcg'
+  if (s === 'other_tcg' || s === 'tcg' || s === 'magic' || s === 'yugioh' || s === 'ygo') return 'other_tcg'
+  return 'sports'
 }
 
 function normalizeConfidence (v: unknown): 'high' | 'medium' | 'low' | undefined {
@@ -319,9 +315,12 @@ async function handleIdentifyCard (req: ApiRequest, res: ApiResponse) {
 
   if (isDemoMode()) {
     const f = fakeIdentifyPayload()
-    const sport = normalizeSport(asStr(f.sport))
+    const cardType = normalizeCardType(f.card_type)
+    const sport =
+      cardType === 'sports' ? normalizeSport(asStr(f.sport)) : undefined
     const confidence = normalizeConfidence(f.confidence)
     return res.status(200).json({
+      card_type: cardType,
       player_name: asStr(f.player_name),
       year: asStr(f.year),
       set_name: asStr(f.set_name),
@@ -409,10 +408,13 @@ async function handleIdentifyCard (req: ApiRequest, res: ApiResponse) {
     return res.status(502).json({ error: 'Could not parse card identification response.' })
   }
 
-  const sport = normalizeSport(asStr(parsed.sport))
+  const cardType = normalizeCardType(parsed.card_type)
+  const sport =
+    cardType === 'sports' ? normalizeSport(asStr(parsed.sport)) : undefined
   const confidence = normalizeConfidence(parsed.confidence)
 
   return res.status(200).json({
+    card_type: cardType,
     player_name: asStr(parsed.player_name),
     year: asStr(parsed.year),
     set_name: asStr(parsed.set_name),

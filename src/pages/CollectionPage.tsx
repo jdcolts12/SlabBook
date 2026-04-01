@@ -57,9 +57,11 @@ type CardWritable = Omit<
 >
 
 function formValuesToPayload (userId: string, v: CardFormValues): CardWritable {
+  const tcg =
+    v.detected_card_kind === 'pokemon_tcg' || v.detected_card_kind === 'other_tcg'
   return {
     user_id: userId,
-    sport: v.sport,
+    sport: tcg ? null : v.sport,
     player_name: v.player_name.trim(),
     year: parseOptionalInt(v.year),
     set_name: v.set_name.trim() || null,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import type { Card } from '../../types/card'
 import { getPlayersForSport } from '../../data/playersBySport'
 import { SETS_BY_SPORT, type Sport, SPORTS } from '../../data/sports'
@@ -8,7 +9,10 @@ import {
   variationFromFormValues,
 } from '../../lib/cardForm'
 import { compressImageForVision } from '../../lib/cardImageCompress'
-import { identifyCardFromImage } from '../../lib/identifyCardApi'
+import {
+  identifyCardFromImage,
+  type DetectedCardKind,
+} from '../../lib/identifyCardApi'
 import { supabase } from '../../lib/supabase'
 import { CardPhotoDropzone } from './CardPhotoDropzone'
 
@@ -74,6 +78,7 @@ const GRADE_OPTIONS = [
 ] as const
 
 const emptyForm: CardFormValues = {
+  detected_card_kind: 'sports',
   sport: 'NFL',
   player_name: '',
   year: '',
@@ -95,9 +100,18 @@ function parseSport (value: string | null): Sport {
   return 'NFL'
 }
 
+function normalizeDetectedKind (raw: string | undefined): DetectedCardKind {
+  const t = (raw ?? '').toLowerCase().replace(/-/g, '_')
+  if (t === 'pokemon_tcg' || t === 'pokemon') return 'pokemon_tcg'
+  if (t === 'other_tcg' || t === 'tcg' || t === 'trading_card') return 'other_tcg'
+  return 'sports'
+}
+
 function cardToForm (c: Card): CardFormValues {
+  const sportsRow = Boolean(c.sport)
   return {
-    sport: parseSport(c.sport),
+    detected_card_kind: sportsRow ? 'sports' : 'pokemon_tcg',
+    sport: sportsRow ? parseSport(c.sport) : 'NFL',
     player_name: c.player_name,
     year: c.year != null ? String(c.year) : '',
     set_name: c.set_name ?? '',
@@ -229,6 +243,8 @@ export function CardFormDialog ({
     [form.sport],
   )
 
+  const isSportsCardForm = form.detected_card_kind === 'sports'
+
   const preview = useMemo(() => {
     const variation = variationFromFormValues(form)
     return {
@@ -306,7 +322,11 @@ export function CardFormDialog ({
       )
       if (res.error) throw new Error(res.error)
 
-      const nextSport = res.sport ? parseSport(res.sport) : undefined
+      const detected_card_kind = normalizeDetectedKind(res.card_type)
+      const nextSport =
+        detected_card_kind === 'sports' && res.sport?.trim()
+          ? parseSport(res.sport)
+          : form.sport
       const yDigits = res.year ? normalizeIdentifyYear(res.year) : ''
       const yearNext = yDigits.length === 4 ? yDigits : undefined
       const graded =
@@ -316,8 +336,9 @@ export function CardFormDialog ({
 
       const merged: CardFormValues = {
         ...form,
+        detected_card_kind,
         player_name: res.player_name?.trim() || form.player_name,
-        sport: nextSport ?? form.sport,
+        sport: nextSport,
         year: yearNext ?? form.year,
         set_name: res.set_name?.trim() || form.set_name,
         card_number: res.card_number?.trim() || form.card_number,
@@ -334,7 +355,13 @@ export function CardFormDialog ({
       setVerifyLowConfidence(res.confidence === 'low')
       setScanDetailsRevealed(true)
       if (banner === 'review') {
-        setIdentifyBanner('Card identified! Please verify the details below.')
+        setIdentifyBanner(
+          merged.detected_card_kind === 'pokemon_tcg'
+            ? 'Identified as Pokémon TCG — no league field. Please verify below.'
+            : merged.detected_card_kind === 'other_tcg'
+              ? 'Identified as a trading card (not US sports). Please verify below.'
+              : 'Card identified! Please verify the details below.',
+        )
       }
       return merged
     } catch (err) {
@@ -565,38 +592,61 @@ export function CardFormDialog ({
               {!hideScanCardForm && (
               <>
               <div className={ringBlock}>
-                <div>
-                  <label htmlFor="sport" className="text-sm font-medium text-zinc-300">
-                    Sport <span className="text-red-400">*</span>
-                  </label>
-                  <select
-                    id="sport"
-                    value={form.sport}
-                    onChange={(e) => {
-                      const sport = e.target.value as Sport
-                      setForm((f) => ({
-                        ...f,
-                        sport,
-                        set_name: '',
-                      }))
-                    }}
-                    className={inputCls}
-                  >
-                    {SPORTS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {isSportsCardForm ? (
+                  <div>
+                    <label htmlFor="sport" className="text-sm font-medium text-zinc-300">
+                      Sport <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      id="sport"
+                      value={form.sport}
+                      onChange={(e) => {
+                        const sport = e.target.value as Sport
+                        setForm((f) => ({
+                          ...f,
+                          sport,
+                          set_name: '',
+                        }))
+                      }}
+                      className={inputCls}
+                    >
+                      {SPORTS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-zinc-700/80 bg-zinc-950/40 p-3 text-sm text-zinc-400">
+                    <p>
+                      {form.detected_card_kind === 'pokemon_tcg'
+                        ? 'Detected Pokémon TCG — league isn’t used for this card.'
+                        : 'Detected trading card (not US sports) — league isn’t used.'}
+                    </p>
+                    {form.detected_card_kind === 'pokemon_tcg' && (
+                      <Link
+                        to="/dashboard/collection/pokemon"
+                        className="mt-2 inline-block font-medium text-slab-teal-light underline-offset-4 hover:text-slab-teal-muted hover:underline"
+                      >
+                        Track Pokémon in the Pokémon collection tab →
+                      </Link>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-4">
                   <label htmlFor="player_name" className="text-sm font-medium text-zinc-300">
-                    Player name <span className="text-red-400">*</span>
+                    {isSportsCardForm
+                      ? 'Player name'
+                      : form.detected_card_kind === 'pokemon_tcg'
+                        ? 'Character / card name'
+                        : 'Name on card'}{' '}
+                    <span className="text-red-400">*</span>
                   </label>
                   <input
                     id="player_name"
-                    list={datalistId}
+                    list={isSportsCardForm ? datalistId : undefined}
                     required
                     autoComplete="off"
                     value={playerInput}
@@ -606,13 +656,19 @@ export function CardFormDialog ({
                       setForm((f) => ({ ...f, player_name: v }))
                     }}
                     className={inputCls}
-                    placeholder="Start typing — suggestions from top names"
+                    placeholder={
+                      isSportsCardForm
+                        ? 'Start typing — suggestions from top names'
+                        : 'As printed on the card'
+                    }
                   />
-                  <datalist id={datalistId}>
-                    {playerOptions.map((name) => (
-                      <option key={name} value={name} />
-                    ))}
-                  </datalist>
+                  {isSportsCardForm && (
+                    <datalist id={datalistId}>
+                      {playerOptions.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                  )}
                 </div>
               </div>
 
@@ -703,29 +759,44 @@ export function CardFormDialog ({
               <div className={ringBlock}>
                 <div>
                   <label htmlFor="set_name" className="text-sm font-medium text-zinc-300">
-                    Set
+                    {isSportsCardForm ? 'Set' : 'Set / expansion'}
                   </label>
-                  <select
-                    id="set_name"
-                    value={setOptions.includes(form.set_name) ? form.set_name : ''}
-                    onChange={(e) => setForm((f) => ({ ...f, set_name: e.target.value }))}
-                    className={inputCls}
-                  >
-                    <option value="">Select a set…</option>
-                    {setOptions.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-zinc-500">Filtered by sport. Override or enter a custom name below.</p>
-                  <input
-                    type="text"
-                    value={form.set_name}
-                    onChange={(e) => setForm((f) => ({ ...f, set_name: e.target.value }))}
-                    className={`${inputCls} mt-2`}
-                    placeholder="Custom set name"
-                  />
+                  {isSportsCardForm ? (
+                    <>
+                      <select
+                        id="set_name"
+                        value={setOptions.includes(form.set_name) ? form.set_name : ''}
+                        onChange={(e) => setForm((f) => ({ ...f, set_name: e.target.value }))}
+                        className={inputCls}
+                      >
+                        <option value="">Select a set…</option>
+                        {setOptions.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Filtered by sport. Override or enter a custom name below.
+                      </p>
+                      <input
+                        type="text"
+                        value={form.set_name}
+                        onChange={(e) => setForm((f) => ({ ...f, set_name: e.target.value }))}
+                        className={`${inputCls} mt-2`}
+                        placeholder="Custom set name"
+                      />
+                    </>
+                  ) : (
+                    <input
+                      id="set_name"
+                      type="text"
+                      value={form.set_name}
+                      onChange={(e) => setForm((f) => ({ ...f, set_name: e.target.value }))}
+                      className={inputCls}
+                      placeholder="e.g. Scarlet & Violet — 151"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -959,12 +1030,29 @@ export function CardFormDialog ({
               ) : (
                 <div className="mt-4 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 text-sm">
                   <dl className="space-y-2 text-zinc-300">
+                    {isSportsCardForm ? (
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-zinc-500">Sport</dt>
+                        <dd className="text-right font-medium text-white">{preview.sport}</dd>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-zinc-500">Category</dt>
+                        <dd className="text-right font-medium text-white">
+                          {form.detected_card_kind === 'pokemon_tcg'
+                            ? 'Pokémon TCG'
+                            : 'Trading card'}
+                        </dd>
+                      </div>
+                    )}
                     <div className="flex justify-between gap-4">
-                      <dt className="text-zinc-500">Sport</dt>
-                      <dd className="text-right font-medium text-white">{preview.sport}</dd>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-zinc-500">Player</dt>
+                      <dt className="text-zinc-500">
+                        {isSportsCardForm
+                          ? 'Player'
+                          : form.detected_card_kind === 'pokemon_tcg'
+                            ? 'Character / card'
+                            : 'Name'}
+                      </dt>
                       <dd className="text-right font-medium text-white">{preview.player}</dd>
                     </div>
                     <div className="flex justify-between gap-4">
