@@ -36,24 +36,23 @@ export function fakeCardEstimate (card: CardEstimateInput): CardEstimateResult {
 }
 
 export function fakeInsightsMarkdown (): string {
-  return `## Portfolio health summary
-Demo mode — AI is disabled. This is placeholder copy for layout and QA.
+  return `## Portfolio health
+Demo mode — AI is disabled. This sample shows the ${new Date().getUTCFullYear()} layout: your portfolio has $0.00 invested across 0 live cards until you turn off \`DEMO_MODE\`. Diversification and risk notes will reference real player names and dollar amounts once connected.
 
-## Top 3 opportunities
-1. Example card A — review comps when AI is on.
-2. Example card B
-3. Example card C
+## Sell candidates
+1. Demo Player 2020 Demo Set PSA 10 — if this were real at $500 purchase and $650 value, we would cite holding period and annualized return here with a sell rationale tied to ${new Date().getUTCFullYear()} market context.
 
-## Top 3 risks
-1. Market volatility on rookies
-2. Grade sensitivity
-3. Liquidity on niche sets
+## Strong holds
+1. Demo Player 2020 Demo Set PSA 10 — upside would be explained with a catalyst and timeframe, using exact labels from your collection.
 
-## Sleeper pick
-Pick a card you like — real analysis requires Pro + live AI.
+## Watch list
+- Demo Player 2020 — monitor for injury or performance shifts; placeholder until live data runs.
 
-## Action this week
-Turn off \`DEMO_MODE\` when you are ready to test real estimates.`
+## Hidden gem
+Demo Player 2020 Demo Set — undervalued narrative would cite comps and population when available.
+
+## This week's action
+Turn off \`DEMO_MODE\` and run insights with a real collection to test web context + Claude.`
 }
 
 export function fakeIdentifyPayload (): Record<string, unknown> {

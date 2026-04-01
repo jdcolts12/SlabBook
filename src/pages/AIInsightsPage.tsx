@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useUserProfile } from '../hooks/useUserProfile'
-import { parseInsightSections } from '../lib/parseInsightSections'
+import { parseInsightSections, stripInsightMachineMetadata } from '../lib/parseInsightSections'
 import { formatLastAnalyzed } from '../lib/relativeTime'
 import { createCheckoutSession } from '../lib/stripeApi'
 import { supabase } from '../lib/supabase'
@@ -13,6 +13,55 @@ function formatDate (value: string): string {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
   return d.toLocaleString()
+}
+
+function formatGeneratedDateLine (value: string): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleDateString(undefined, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+function formatCompactDate (value: string): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+type GeneratingPhase = 'idle' | 'market' | 'insights'
+
+function sectionSurfaceClass (title: string): string {
+  const t = title.toLowerCase()
+  if (t.includes('sell')) {
+    return 'rounded-xl border border-orange-500/25 bg-orange-500/[0.07] pl-4 pr-4 py-4 sm:pl-5'
+  }
+  if (t.includes('strong hold')) {
+    return 'rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] pl-4 pr-4 py-4 sm:pl-5'
+  }
+  if (t.includes('watch')) {
+    return 'rounded-xl border border-yellow-500/25 bg-yellow-500/[0.06] pl-4 pr-4 py-4 sm:pl-5'
+  }
+  if (t.includes('hidden gem')) {
+    return 'rounded-xl border border-violet-500/30 bg-violet-500/[0.08] pl-4 pr-4 py-4 sm:pl-5'
+  }
+  if (t.includes("this week")) {
+    return 'rounded-xl border border-teal-500/40 bg-teal-500/15 pl-4 pr-4 py-4 sm:pl-5 ring-1 ring-teal-500/20'
+  }
+  return 'pl-0 pr-0 py-1'
+}
+
+function sectionHeadingClass (title: string): string {
+  const t = title.toLowerCase()
+  if (t.includes('sell')) return 'text-orange-200'
+  if (t.includes('strong hold')) return 'text-emerald-200'
+  if (t.includes('watch')) return 'text-yellow-100'
+  if (t.includes('hidden gem')) return 'text-violet-200'
+  if (t.includes("this week")) return 'text-teal-200'
+  return 'text-white'
 }
 
 export function AIInsightsPage () {
@@ -26,6 +75,11 @@ export function AIInsightsPage () {
   const [readingIds, setReadingIds] = useState<Record<string, boolean>>({})
   const [cardCount, setCardCount] = useState<number | null>(null)
   const [infoBanner, setInfoBanner] = useState<string | null>(null)
+  const [generatingPhase, setGeneratingPhase] = useState<GeneratingPhase>('idle')
+  const [sessionInsightMeta, setSessionInsightMeta] = useState<{
+    used_web_search?: boolean
+    quality_disclaimer?: boolean
+  } | null>(null)
 
   const loadInsights = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) {
@@ -71,6 +125,16 @@ export function AIInsightsPage () {
   }, [loadInsights, loadCardCount])
 
   useEffect(() => {
+    if (!generating) {
+      setGeneratingPhase('idle')
+      return
+    }
+    setGeneratingPhase('market')
+    const t = window.setTimeout(() => setGeneratingPhase('insights'), 2800)
+    return () => window.clearTimeout(t)
+  }, [generating])
+
+  useEffect(() => {
     if (!user) return
     const channel = supabase
       .channel(`insights-${user.id}`)
@@ -94,10 +158,25 @@ export function AIInsightsPage () {
   }, [user, loadInsights])
 
   const latest = insights[0]
+  const latestDisplay = useMemo(() => {
+    if (!latest) {
+      return {
+        displayContent: '',
+        flags: { usedWebSearch: false, qualityVerify: false },
+      }
+    }
+    return stripInsightMachineMetadata(latest.content)
+  }, [latest])
+
   const latestSections = useMemo(
-    () => (latest ? parseInsightSections(latest.content) : []),
-    [latest],
+    () => (latest ? parseInsightSections(latestDisplay.displayContent) : []),
+    [latest, latestDisplay.displayContent],
   )
+
+  const usedWebSearchForLatest =
+    sessionInsightMeta?.used_web_search ?? latestDisplay.flags.usedWebSearch
+  const qualityDisclaimerForLatest =
+    sessionInsightMeta?.quality_disclaimer ?? latestDisplay.flags.qualityVerify
 
   const unreadCount = insights.filter((insight) => !insight.is_read).length
 
@@ -106,6 +185,7 @@ export function AIInsightsPage () {
     setGenerating(true)
     setError(null)
     setInfoBanner(null)
+    setSessionInsightMeta(null)
     try {
       const {
         data: { session },
@@ -124,7 +204,13 @@ export function AIInsightsPage () {
       })
 
       const payload = (await response.json().catch(() => null)) as
-        | { error?: string; no_cards?: boolean; insight?: string }
+        | {
+            error?: string
+            no_cards?: boolean
+            insight?: string
+            used_web_search?: boolean
+            quality_disclaimer?: boolean
+          }
         | null
 
       if (!response.ok) {
@@ -134,6 +220,13 @@ export function AIInsightsPage () {
       if (payload?.no_cards && payload.insight) {
         setInfoBanner(payload.insight)
         return
+      }
+
+      if (payload && typeof payload.used_web_search === 'boolean') {
+        setSessionInsightMeta({
+          used_web_search: payload.used_web_search,
+          quality_disclaimer: Boolean(payload.quality_disclaimer),
+        })
       }
 
       await loadInsights({ silent: true })
@@ -262,7 +355,9 @@ export function AIInsightsPage () {
                   className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-900/30 border-t-zinc-900"
                   aria-hidden
                 />
-                Analyzing…
+                {generatingPhase === 'insights'
+                  ? 'Generating your insights…'
+                  : 'Analyzing current market…'}
               </>
             ) : (
               <>
@@ -273,7 +368,7 @@ export function AIInsightsPage () {
                     d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.847a4.5 4.5 0 003.09 3.09L15.75 12l-2.847.813a4.5 4.5 0 00-3.09 3.09z"
                   />
                 </svg>
-                {latest ? 'Refresh insights' : 'Get insights'}
+                {latest ? `Refresh insights (${formatCompactDate(latest.created_at)})` : 'Get insights'}
               </>
             )}
           </button>
@@ -325,18 +420,32 @@ export function AIInsightsPage () {
             disabled={generating || !canAnalyze}
             className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-slab-teal px-6 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
           >
-            {generating ? 'Analyzing…' : 'Get insights'}
+            {generating
+              ? generatingPhase === 'insights'
+                ? 'Generating your insights…'
+                : 'Analyzing current market…'
+              : 'Get insights'}
           </button>
         </div>
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-zinc-500">
-              Last analyzed:{' '}
-              <span className="font-medium text-zinc-300">{formatLastAnalyzed(latest.created_at)}</span>
-              <span className="text-zinc-600"> · </span>
-              <span className="text-zinc-500">{formatDate(latest.created_at)}</span>
-            </p>
+            <div className="space-y-1 text-sm text-zinc-500">
+              <p>
+                Last run:{' '}
+                <span className="font-medium text-zinc-300">{formatLastAnalyzed(latest.created_at)}</span>
+                <span className="text-zinc-600"> · </span>
+                <span className="text-zinc-500">{formatDate(latest.created_at)}</span>
+              </p>
+              <p className="text-xs text-zinc-500">
+                Generated {formatGeneratedDateLine(latest.created_at)} based on current market data.
+              </p>
+              {usedWebSearchForLatest && (
+                <p className="text-xs font-medium text-teal-400/90">
+                  Includes live market data for your top cards
+                </p>
+              )}
+            </div>
             {latest && !latest.is_read && (
               <button
                 type="button"
@@ -370,11 +479,18 @@ export function AIInsightsPage () {
 
             <div className="space-y-8">
               {latestSections.length === 0 ? (
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">{latest.content}</div>
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                  {latestDisplay.displayContent}
+                </div>
               ) : (
                 latestSections.map((section) => (
-                  <section key={section.title}>
-                    <h3 className="border-b border-[var(--color-border-subtle)] pb-2 text-base font-semibold text-white">
+                  <section key={section.title} className={sectionSurfaceClass(section.title)}>
+                    <h3
+                      className={[
+                        'border-b border-[var(--color-border-subtle)] pb-2 text-base font-semibold',
+                        sectionHeadingClass(section.title),
+                      ].join(' ')}
+                    >
                       {section.title}
                     </h3>
                     <div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
@@ -384,6 +500,16 @@ export function AIInsightsPage () {
                 ))
               )}
             </div>
+
+            {qualityDisclaimerForLatest && (
+              <p className="mt-6 text-xs text-amber-200/90">
+                Review these insights — some details may need verification.
+              </p>
+            )}
+            <p className="mt-4 text-xs leading-relaxed text-zinc-500">
+              AI insights are educational and not financial advice. Always verify before acting on
+              recommendations.
+            </p>
           </div>
 
           {insights.length > 1 && (
@@ -396,7 +522,11 @@ export function AIInsightsPage () {
                     className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/80 px-4 py-3"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <p className="line-clamp-2 text-sm text-zinc-400">{row.content.replace(/^##[^\n]+\n?/m, '').trim()}</p>
+                      <p className="line-clamp-2 text-sm text-zinc-400">
+                        {stripInsightMachineMetadata(row.content)
+                          .displayContent.replace(/^##[^\n]+\n?/m, '')
+                          .trim()}
+                      </p>
                       <div className="flex shrink-0 flex-col items-end gap-1">
                         <span className="text-[10px] text-zinc-500">{formatLastAnalyzed(row.created_at)}</span>
                         {!row.is_read && (

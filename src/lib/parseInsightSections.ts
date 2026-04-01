@@ -3,6 +3,28 @@ export type InsightSection = {
   body: string
 }
 
+export type InsightContentFlags = {
+  usedWebSearch: boolean
+  qualityVerify: boolean
+}
+
+/**
+ * Removes HTML machine tags appended by the insights API and returns clean markdown for display.
+ */
+export function stripInsightMachineMetadata (raw: string): { displayContent: string; flags: InsightContentFlags } {
+  const flags: InsightContentFlags = { usedWebSearch: false, qualityVerify: false }
+  let body = raw
+  if (body.includes('<!--slabbook:flags:websearch-->')) {
+    flags.usedWebSearch = true
+    body = body.replace(/\n*<!--slabbook:flags:websearch-->\n*/g, '\n')
+  }
+  if (body.includes('<!--slabbook:flags:verify-->')) {
+    flags.qualityVerify = true
+    body = body.replace(/\n*<!--slabbook:flags:verify-->\n*/g, '\n')
+  }
+  return { displayContent: body.trim(), flags }
+}
+
 /**
  * Splits Claude markdown (## headers) into sections for the insights panel.
  */
