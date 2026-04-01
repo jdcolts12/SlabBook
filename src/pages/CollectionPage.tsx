@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { CollectionSubnav } from '../components/collection/CollectionSubnav'
 import { CardFormDialog, type CardFormSubmitPayload } from '../components/collection/CardFormDialog'
 import { CardImageModal } from '../components/collection/CardImageModal'
 import { CollectionGridView } from '../components/collection/CollectionGridView'
@@ -27,6 +28,7 @@ import {
 } from '../lib/cardImageStorage'
 import { supabase } from '../lib/supabase'
 import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
+import { fetchTotalCardCount } from '../lib/collectionCounts'
 import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
 import { getCardValue } from '../lib/pricing-service'
 import { createCheckoutSession } from '../lib/stripeApi'
@@ -174,7 +176,7 @@ export function CollectionPage () {
   }, [user])
 
   useEffect(() => {
-    document.title = 'Collection — SlabBook'
+    document.title = 'Sports collection — SlabBook'
   }, [])
 
   useEffect(() => {
@@ -259,15 +261,31 @@ export function CollectionPage () {
   }
 
   function openAdd (opts?: { scan?: boolean }) {
-    const cap = maxCardsForUser(profile)
-    if (cards.length >= cap) {
-      setUpgradeOpen(true)
-      return
-    }
-    setDialogMode('add')
-    setEditing(null)
-    setScanModeOpen(Boolean(opts?.scan))
-    setDialogOpen(true)
+    void (async () => {
+      if (!user) return
+      const cap = maxCardsForUser(profile)
+      if (!Number.isFinite(cap)) {
+        setDialogMode('add')
+        setEditing(null)
+        setScanModeOpen(Boolean(opts?.scan))
+        setDialogOpen(true)
+        return
+      }
+      try {
+        const total = await fetchTotalCardCount(supabase, user.id)
+        if (total >= cap) {
+          setUpgradeOpen(true)
+          return
+        }
+      } catch {
+        setLoadError('Could not verify collection limit.')
+        return
+      }
+      setDialogMode('add')
+      setEditing(null)
+      setScanModeOpen(Boolean(opts?.scan))
+      setDialogOpen(true)
+    })()
   }
 
   function openEdit (c: Card) {
@@ -306,9 +324,12 @@ export function CollectionPage () {
 
     if (dialogMode === 'add') {
       const cap = maxCardsForUser(profile)
-      if (cards.length >= cap) {
-        setUpgradeOpen(true)
-        throw new Error('Collection limit reached. Upgrade to add more cards.')
+      if (Number.isFinite(cap)) {
+        const total = await fetchTotalCardCount(supabase, user.id)
+        if (total >= cap) {
+          setUpgradeOpen(true)
+          throw new Error('Collection limit reached. Upgrade to add more cards.')
+        }
       }
       const { data: row, error } = await supabase
         .from('cards')
@@ -473,6 +494,7 @@ export function CollectionPage () {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      <CollectionSubnav />
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
       )}
@@ -539,9 +561,9 @@ export function CollectionPage () {
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Collection</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Sports cards</h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Portfolio, filters, and market values — switch between table and grid anytime.
+            Rookies, autos, and slabs — Pokémon lives in its own tab. Table or grid, filters, and AI values.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
@@ -689,7 +711,7 @@ export function CollectionPage () {
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
         title="Upgrade to Pro"
-        body="You've reached the 15 card limit on the free plan. Pro includes unlimited cards, full AI (identify, pricing, daily insights), alerts, market values, trade tools, and tax export."
+        body="You've reached the 15 card limit on the free plan (sports + Pokémon combined). Pro includes unlimited cards, full AI (identify, pricing, daily insights), alerts, market values, trade tools, and tax export."
         ctaLabel="Get Pro"
         ctaLoading={upgradeLoading}
         onCta={() => {

@@ -1,4 +1,5 @@
 import type { Card } from '../types/card'
+import type { PokemonCard } from '../types/pokemonCard'
 
 export function cardGainDollars (c: Card): number | null {
   const v = c.current_value != null ? Number(c.current_value) : null
@@ -63,6 +64,49 @@ export function computePortfolioMetrics (cards: Card[]): PortfolioMetrics {
     count: cards.length,
     bestPerformer: best,
   }
+}
+
+export function sumPokemonFinancials (pokemon: PokemonCard[]): {
+  totalValue: number
+  totalInvested: number
+  count: number
+} {
+  let totalValue = 0
+  let totalInvested = 0
+  for (const c of pokemon) {
+    totalValue += Number(c.current_value ?? 0)
+    totalInvested += Number(c.purchase_price ?? 0)
+  }
+  return { totalValue, totalInvested, count: pokemon.length }
+}
+
+/** Dashboard-style rollup; Pokémon uses mid value only for low/high range. */
+export function mergeSportsAndPokemonMetrics (
+  sports: PortfolioMetrics,
+  pokemon: PokemonCard[],
+): PortfolioMetrics {
+  const p = sumPokemonFinancials(pokemon)
+  const totalValue = sports.totalValue + p.totalValue
+  const totalInvested = sports.totalInvested + p.totalInvested
+  const gainLossDollars = totalValue - totalInvested
+  const gainLossPercent =
+    totalInvested > 0 ? (gainLossDollars / totalInvested) * 100 : null
+  return {
+    totalValue,
+    totalValueLow: sports.totalValueLow + p.totalValue,
+    totalValueHigh: sports.totalValueHigh + p.totalValue,
+    totalInvested,
+    gainLossDollars,
+    gainLossPercent,
+    count: sports.count + p.count,
+    bestPerformer: sports.bestPerformer,
+  }
+}
+
+export function formatPokemonGradeLine (c: PokemonCard): string {
+  if (!c.is_graded) return 'Raw'
+  const bits = [c.grading_company, c.grade].filter(Boolean)
+  return bits.length ? bits.join(' ') : 'Graded'
 }
 
 export type SortKey = 'value' | 'gain_pct' | 'player' | 'date_added'

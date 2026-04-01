@@ -4,6 +4,8 @@ import { DashboardLayout } from './components/layout/DashboardLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AIInsightsPage } from './pages/AIInsightsPage'
 import { CollectionPage } from './pages/CollectionPage'
+import { CombinedCollectionPage } from './pages/CombinedCollectionPage'
+import { PokemonCollectionPage } from './pages/PokemonCollectionPage'
 import { DashboardHomePage } from './pages/DashboardHomePage'
 import { MarketValuesPage } from './pages/MarketValuesPage'
 import { AdminPage } from './pages/AdminPage'
@@ -36,6 +38,8 @@ function App () {
           >
             <Route index element={<DashboardHomePage />} />
             <Route path="collection" element={<CollectionPage />} />
+            <Route path="collection/pokemon" element={<PokemonCollectionPage />} />
+            <Route path="collection/all" element={<CombinedCollectionPage />} />
             <Route path="market-values" element={<MarketValuesPage />} />
             <Route path="insights" element={<AIInsightsPage />} />
             <Route path="settings/billing" element={<BillingSettingsPage />} />

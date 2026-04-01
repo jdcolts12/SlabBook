@@ -78,6 +78,33 @@ create index if not exists cards_user_id_idx on public.cards (user_id);
 create index if not exists cards_player_name_idx on public.cards (player_name);
 
 -- ---------------------------------------------------------------------------
+-- Pokémon TCG (separate from sports cards)
+-- ---------------------------------------------------------------------------
+create table if not exists public.pokemon_cards (
+  id uuid primary key default gen_random_uuid (),
+  user_id uuid not null references public.users (id) on delete cascade,
+  pokemon_name text not null,
+  language text not null default 'en'
+    check (language in ('en', 'jp')),
+  set_name text,
+  card_number text,
+  variation text,
+  is_graded boolean not null default false,
+  grade text,
+  grading_company text,
+  condition text,
+  image_front_url text,
+  image_back_url text,
+  purchase_price numeric(12, 2),
+  purchase_date date,
+  current_value numeric(12, 2),
+  created_at timestamptz not null default now ()
+);
+
+create index if not exists pokemon_cards_user_id_idx on public.pokemon_cards (user_id);
+create index if not exists pokemon_cards_created_at_idx on public.pokemon_cards (created_at desc);
+
+-- ---------------------------------------------------------------------------
 -- Price alerts
 -- ---------------------------------------------------------------------------
 create table if not exists public.price_alerts (
@@ -164,6 +191,7 @@ alter table public.price_history enable row level security;
 alter table public.ai_insights enable row level security;
 alter table public.promo_codes enable row level security;
 alter table public.promo_redemptions enable row level security;
+alter table public.pokemon_cards enable row level security;
 
 -- users: own row only
 drop policy if exists "Users select own profile" on public.users;
@@ -180,6 +208,13 @@ create policy "Users update own profile"
 drop policy if exists "Users manage own cards" on public.cards;
 create policy "Users manage own cards"
   on public.cards for all
+  using (auth.uid () = user_id)
+  with check (auth.uid () = user_id);
+
+-- pokemon_cards
+drop policy if exists "Users manage own pokemon cards" on public.pokemon_cards;
+create policy "Users manage own pokemon cards"
+  on public.pokemon_cards for all
   using (auth.uid () = user_id)
   with check (auth.uid () = user_id);
 

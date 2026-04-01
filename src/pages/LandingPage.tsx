@@ -14,7 +14,7 @@ const FAQ = [
   },
   {
     q: 'What sports and cards are supported?',
-    a: 'NFL, NBA, MLB, and NHL cards. Raw and graded (PSA, BGS, SGC, CGC).',
+    a: 'Sports: NFL, NBA, MLB, and NHL — raw and graded (PSA, BGS, SGC, CGC). Pokémon TCG has its own collection area with English and Japanese cards and PSA/CGC-style tracking, kept separate from sports.',
   },
   {
     q: 'Can I add photos of my cards?',
@@ -42,7 +42,7 @@ type ShowcaseSlab = {
   player: string
   setName: string
   cardNo: string
-  company: 'PSA' | 'BGS'
+  company: 'PSA' | 'BGS' | 'CGC'
   grade: string
   value: string
   /** Tailwind classes for the card-face gradient */
@@ -50,7 +50,7 @@ type ShowcaseSlab = {
   nameOnCard: string
 }
 
-const SHOWCASE_SLABS: ShowcaseSlab[] = [
+const SHOWCASE_SPORTS_SLABS: ShowcaseSlab[] = [
   {
     player: 'Michael Jordan',
     setName: '1986 Fleer',
@@ -80,6 +80,75 @@ const SHOWCASE_SLABS: ShowcaseSlab[] = [
     value: '$3,950',
     face: 'from-[#7f1d1d] via-[#1c1917] to-[#0c0a09]',
     nameOnCard: 'SHOHEI·OHTANI',
+  },
+]
+
+const SHOWCASE_POKEMON_SLABS: ShowcaseSlab[] = [
+  {
+    player: 'Charizard',
+    setName: 'Base Set · JP',
+    cardNo: '#6',
+    company: 'PSA',
+    grade: '10',
+    value: '$4,200',
+    face: 'from-[#b45309] via-[#7c2d12] to-[#1c1917]',
+    nameOnCard: 'CHARIZARD',
+  },
+  {
+    player: 'Pikachu',
+    setName: 'Celebrations',
+    cardNo: '#005',
+    company: 'CGC',
+    grade: '9.5',
+    value: '$185',
+    face: 'from-[#ca8a04] via-[#713f12] to-[#1c1917]',
+    nameOnCard: 'PIKACHU',
+  },
+  {
+    player: 'Umbreon',
+    setName: 'Moonbreon',
+    cardNo: '#215/203',
+    company: 'PSA',
+    grade: '10',
+    value: '$920',
+    face: 'from-[#312e81] via-[#1e1b4b] to-[#0f172a]',
+    nameOnCard: 'UMBREON',
+  },
+]
+
+type LandingShowcaseSlide = {
+  key: string
+  title: string
+  subtitle: string
+  weekMain: string
+  weekSub: string
+  slabs: ShowcaseSlab[]
+  insightTitle: string
+  insightBody: string
+}
+
+const LANDING_SHOWCASE_SLIDES: LandingShowcaseSlide[] = [
+  {
+    key: 'sports',
+    title: 'Sports cards',
+    subtitle: 'Slabs with photos · live estimates',
+    weekMain: '+$1,248',
+    weekSub: 'est. week',
+    slabs: SHOWCASE_SPORTS_SLABS,
+    insightTitle: 'AI insight',
+    insightBody:
+      'Jordan and Brady estimates ticked up this week. Ohtani shows strong sold volume—worth watching if you are trimming or doubling down.',
+  },
+  {
+    key: 'pokemon',
+    title: 'Pokémon TCG',
+    subtitle: 'English & Japanese · own tab — not mixed with sports',
+    weekMain: '+$892',
+    weekSub: 'est. week',
+    slabs: SHOWCASE_POKEMON_SLABS,
+    insightTitle: 'AI insight',
+    insightBody:
+      'Charizard and Moonbreon slabs are up in recent sales. Pikachu promos are moving fast—good moment to review what you are holding vs flipping.',
   },
 ]
 
@@ -116,86 +185,190 @@ const HOW_STEPS: { title: string; detail: string; icon: string }[] = [
   },
 ]
 
-function LandingCollectionMockup () {
+function companyStripClass (company: ShowcaseSlab['company']): string {
+  if (company === 'PSA') {
+    return 'bg-[#c41e1e] text-white shadow-sm shadow-red-900/50'
+  }
+  if (company === 'CGC') {
+    return 'bg-gradient-to-r from-[#1e3a5f] to-[#0f2744] text-sky-100 ring-1 ring-sky-500/35'
+  }
+  return 'bg-gradient-to-r from-zinc-900 to-black text-amber-100 ring-1 ring-amber-600/40'
+}
+
+function ShowcaseSlabColumn ({ c }: { c: ShowcaseSlab }) {
   return (
-    <div className="relative rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 shadow-2xl shadow-black/50 sm:p-5">
-      <div className="mb-4 flex flex-col gap-2 border-b border-[var(--color-border-subtle)] pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slab-teal-light">Your collection</p>
-          <p className="text-[11px] text-[var(--slab-text-muted)]">Slabs with photos · live estimates</p>
-        </div>
-        <div className="shrink-0 self-start rounded-full bg-slab-teal/15 px-2.5 py-1.5 text-[10px] font-semibold tabular-nums text-slab-teal-light sm:self-auto sm:py-1">
-          +$1,248 <span className="font-normal opacity-80">est. week</span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
-        {SHOWCASE_SLABS.map((c) => (
-          <div key={c.player} className="flex flex-col items-center">
-            <div className="relative w-full max-w-[112px] sm:max-w-[128px]">
-              {/* Frosted slab holder */}
-              <div className="rounded-lg bg-gradient-to-b from-zinc-400/25 via-zinc-500/10 to-zinc-600/20 p-[2px] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_rgba(0,0,0,0.45)] ring-1 ring-white/5">
-                <div className="rounded-[6px] bg-zinc-950/95 p-1 sm:p-1.5">
-                  {/* Grading label strip */}
-                  <div
-                    className={[
-                      'mb-1 flex items-center justify-between rounded px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-wider sm:text-[8px]',
-                      c.company === 'PSA'
-                        ? 'bg-[#c41e1e] text-white shadow-sm shadow-red-900/50'
-                        : 'bg-gradient-to-r from-zinc-900 to-black text-amber-100 ring-1 ring-amber-600/40',
-                    ].join(' ')}
-                  >
-                    <span>{c.company}</span>
-                    <span className="tabular-nums">{c.grade}</span>
-                  </div>
-
-                  {/* Card face — trading card proportions */}
-                  <div
-                    className={[
-                      'relative aspect-[2.5/3.5] overflow-hidden rounded-sm border border-white/[0.12] shadow-inner shadow-black/60',
-                      'bg-gradient-to-br',
-                      c.face,
-                    ].join(' ')}
-                  >
-                    <div
-                      className="pointer-events-none absolute inset-0 bg-[linear-gradient(125deg,rgba(255,255,255,0.15)_0%,transparent_45%,transparent_60%,rgba(255,255,255,0.06)_100%)]"
-                      aria-hidden
-                    />
-                    <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/10 to-transparent" aria-hidden />
-
-                    <div className="absolute inset-x-1 top-2 text-center sm:inset-x-1.5 sm:top-2.5">
-                      <p className="text-[5px] font-bold uppercase tracking-[0.2em] text-white/55 sm:text-[6px]">
-                        {c.setName}
-                      </p>
-                    </div>
-
-                    <div className="absolute inset-x-1 bottom-5 flex flex-col items-center justify-end text-center sm:bottom-6">
-                      <p className="max-w-full truncate text-[6px] font-black uppercase leading-tight tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] sm:text-[7px]">
-                        {c.nameOnCard}
-                      </p>
-                      <p className="mt-0.5 text-[5px] font-semibold tabular-nums text-white/70 sm:text-[6px]">{c.cardNo}</p>
-                    </div>
-
-                    <div className="absolute bottom-0 left-0 right-0 h-[18%] bg-gradient-to-t from-black/75 to-transparent" aria-hidden />
-                  </div>
-                </div>
-              </div>
+    <div className="flex flex-col items-center">
+      <div className="relative w-full max-w-[112px] sm:max-w-[128px]">
+        <div className="rounded-lg bg-gradient-to-b from-zinc-400/25 via-zinc-500/10 to-zinc-600/20 p-[2px] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_rgba(0,0,0,0.45)] ring-1 ring-white/5">
+          <div className="rounded-[6px] bg-zinc-950/95 p-1 sm:p-1.5">
+            <div
+              className={[
+                'mb-1 flex items-center justify-between rounded px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-wider sm:text-[8px]',
+                companyStripClass(c.company),
+              ].join(' ')}
+            >
+              <span>{c.company}</span>
+              <span className="tabular-nums">{c.grade}</span>
             </div>
 
-            <p className="mt-2.5 w-full truncate text-center text-[10px] font-semibold text-zinc-100 sm:text-[11px]">{c.player}</p>
-            <p className="w-full truncate text-center text-[9px] text-zinc-500">{c.setName}</p>
-            <p className="mt-1 text-center text-[11px] font-bold tabular-nums text-slab-teal-light sm:text-xs">{c.value}</p>
+            <div
+              className={[
+                'relative aspect-[2.5/3.5] overflow-hidden rounded-sm border border-white/[0.12] shadow-inner shadow-black/60',
+                'bg-gradient-to-br',
+                c.face,
+              ].join(' ')}
+            >
+              <div
+                className="pointer-events-none absolute inset-0 bg-[linear-gradient(125deg,rgba(255,255,255,0.15)_0%,transparent_45%,transparent_60%,rgba(255,255,255,0.06)_100%)]"
+                aria-hidden
+              />
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/10 to-transparent" aria-hidden />
+
+              <div className="absolute inset-x-1 top-2 text-center sm:inset-x-1.5 sm:top-2.5">
+                <p className="text-[5px] font-bold uppercase tracking-[0.2em] text-white/55 sm:text-[6px]">{c.setName}</p>
+              </div>
+
+              <div className="absolute inset-x-1 bottom-5 flex flex-col items-center justify-end text-center sm:bottom-6">
+                <p className="max-w-full truncate text-[6px] font-black uppercase leading-tight tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] sm:text-[7px]">
+                  {c.nameOnCard}
+                </p>
+                <p className="mt-0.5 text-[5px] font-semibold tabular-nums text-white/70 sm:text-[6px]">{c.cardNo}</p>
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 h-[18%] bg-gradient-to-t from-black/75 to-transparent" aria-hidden />
+            </div>
           </div>
-        ))}
+        </div>
       </div>
 
-      <div className="mt-4 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-3 sm:p-3.5">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-slab-teal-light/90">AI insight</p>
-        <p className="mt-1 text-xs leading-relaxed text-[var(--slab-text)] sm:text-[13px]">
-          Jordan and Brady estimates ticked up this week. Ohtani shows strong sold volume—worth watching if you are
-          trimming or doubling down.
-        </p>
+      <p className="mt-2.5 w-full truncate text-center text-[10px] font-semibold text-zinc-100 sm:text-[11px]">{c.player}</p>
+      <p className="w-full truncate text-center text-[9px] text-zinc-500">{c.setName}</p>
+      <p className="mt-1 text-center text-[11px] font-bold tabular-nums text-slab-teal-light sm:text-xs">{c.value}</p>
+    </div>
+  )
+}
+
+const SHOWCASE_AUTO_MS = 4500
+
+function HeroCollectionSlideshow () {
+  const [active, setActive] = useState(0)
+  const [pause, setPause] = useState(false)
+  const [reduceMotion, setReduceMotion] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const apply = () => setReduceMotion(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
+  useEffect(() => {
+    if (reduceMotion || pause || LANDING_SHOWCASE_SLIDES.length < 2) return
+    const t = window.setInterval(() => {
+      setActive((i) => (i + 1) % LANDING_SHOWCASE_SLIDES.length)
+    }, SHOWCASE_AUTO_MS)
+    return () => window.clearInterval(t)
+  }, [reduceMotion, pause])
+
+  const slide = LANDING_SHOWCASE_SLIDES[active]
+
+  return (
+    <div
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="Collection preview"
+      className="relative rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 shadow-2xl shadow-black/50 sm:p-5"
+      onMouseEnter={() => setPause(true)}
+      onMouseLeave={() => setPause(false)}
+      onFocusCapture={() => setPause(true)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setPause(false)
+      }}
+    >
+      <p className="sr-only" aria-live={reduceMotion ? 'polite' : 'off'}>
+        {slide.title}. {slide.subtitle}
+      </p>
+      <div className="mb-3 flex flex-col gap-3 border-b border-[var(--color-border-subtle)] pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Your collection</p>
+          <div className="relative mt-1 min-h-[2.75rem] sm:min-h-[3rem]">
+            <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
+              {LANDING_SHOWCASE_SLIDES.map((s, i) => (
+                <div
+                  key={s.key}
+                  className={[
+                    i === active ? 'opacity-100' : 'opacity-0',
+                    i === active ? 'z-10' : 'z-0 pointer-events-none',
+                    reduceMotion ? '' : 'transition-opacity duration-500 ease-out',
+                  ].join(' ')}
+                  aria-hidden={i !== active}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slab-teal-light">{s.title}</p>
+                  <p className="text-[11px] text-[var(--slab-text-muted)]">{s.subtitle}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+          <div className="self-start rounded-full bg-slab-teal/15 px-2.5 py-1.5 text-[10px] font-semibold tabular-nums text-slab-teal-light sm:self-auto sm:py-1">
+            {slide.weekMain} <span className="font-normal opacity-80">{slide.weekSub}</span>
+          </div>
+          <div
+            className="flex items-center justify-center gap-1.5 sm:justify-end"
+            role="group"
+            aria-label="Choose sports or Pokémon preview"
+          >
+            {LANDING_SHOWCASE_SLIDES.map((s, i) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setActive(i)}
+                aria-label={`Show ${s.title} preview`}
+                aria-pressed={i === active}
+                className={[
+                  'h-2 rounded-full transition-all duration-300',
+                  i === active ? 'w-6 bg-slab-teal' : 'w-2 bg-zinc-600 hover:bg-zinc-500',
+                ].join(' ')}
+              />
+            ))}
+          </div>
+        </div>
       </div>
+
+      <div className="relative">
+        <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
+          {LANDING_SHOWCASE_SLIDES.map((s, i) => (
+            <div
+              key={s.key}
+              className={[
+                i === active ? 'opacity-100' : 'opacity-0',
+                i === active ? 'relative z-10' : 'z-0 pointer-events-none',
+                reduceMotion ? '' : 'transition-opacity duration-500 ease-out',
+              ].join(' ')}
+              aria-hidden={i !== active}
+            >
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+                {s.slabs.map((c) => (
+                  <ShowcaseSlabColumn key={`${s.key}-${c.player}`} c={c} />
+                ))}
+              </div>
+
+              <div className="mt-4 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-3 sm:p-3.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slab-teal-light/90">
+                  {s.insightTitle}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--slab-text)] sm:text-[13px]">{s.insightBody}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {!reduceMotion && (
+        <p className="mt-3 text-center text-[10px] text-zinc-600">Pauses on hover · use dots to switch</p>
+      )}
     </div>
   )
 }
@@ -233,9 +406,9 @@ export function LandingPage () {
                 Your Card Collection. Tracked. Valued. Intelligent.
               </h1>
               <p className="mt-4 text-base leading-relaxed text-[var(--slab-text-muted)] sm:mt-5 sm:text-lg">
-                Track your slabs with photos, a binder-style grid or sortable table, and AI that estimates value from
-                live eBay comps. Snap a card — optional auto-identify fills the details — then get portfolio insights
-                that help you buy and sell smarter.
+                Sports and Pokémon TCG each get their own space in the app — plus a combined view when you want the big
+                picture. Photos, binder grid or table, and AI value estimates from live eBay comps for sports. Snap a
+                card, optional auto-identify, then portfolio insights that help you buy and sell smarter.
               </p>
               <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap">
                 {user ? (
@@ -279,28 +452,30 @@ export function LandingPage () {
                 )}
               </div>
             </div>
-            <LandingCollectionMockup />
+            <HeroCollectionSlideshow />
           </div>
         </section>
 
         {/* Social proof */}
         <section className="border-y border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/50 px-4 py-8 sm:px-6 md:px-10">
           <p className="mx-auto max-w-md text-center text-sm font-medium leading-snug text-[var(--slab-text-muted)] sm:max-w-none">
-            NFL · NBA · MLB · NHL — photos, binder grid, and AI in one place
+            NFL · NBA · MLB · NHL · Pokémon TCG — photos, binder grid, and AI in one place
           </p>
-          <div className="mx-auto mt-5 grid max-w-lg grid-cols-2 gap-2 text-center text-sm text-[var(--slab-text)] sm:mt-6 sm:flex sm:max-w-4xl sm:flex-wrap sm:justify-center sm:gap-x-6 sm:gap-y-2">
-            <span className="rounded-lg bg-[var(--color-surface)]/80 px-3 py-2.5 ring-1 ring-[var(--color-border-subtle)] sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0">
-              Card photos
-            </span>
-            <span className="rounded-lg bg-[var(--color-surface)]/80 px-3 py-2.5 ring-1 ring-[var(--color-border-subtle)] sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0">
-              Auto-identify
-            </span>
-            <span className="rounded-lg bg-[var(--color-surface)]/80 px-3 py-2.5 ring-1 ring-[var(--color-border-subtle)] sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0">
-              Live eBay comps
-            </span>
-            <span className="rounded-lg bg-[var(--color-surface)]/80 px-3 py-2.5 ring-1 ring-[var(--color-border-subtle)] sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0">
-              AI insights
-            </span>
+          <div className="mx-auto mt-5 flex max-w-4xl flex-wrap justify-center gap-2 text-center text-sm text-[var(--slab-text)] sm:mt-6 sm:gap-x-6 sm:gap-y-2">
+            {[
+              'Card photos',
+              'Auto-identify',
+              'Live eBay comps',
+              'Pokémon tab',
+              'AI insights',
+            ].map((label) => (
+              <span
+                key={label}
+                className="rounded-lg bg-[var(--color-surface)]/80 px-3 py-2.5 ring-1 ring-[var(--color-border-subtle)] sm:bg-transparent sm:px-0 sm:py-0 sm:ring-0"
+              >
+                {label}
+              </span>
+            ))}
           </div>
         </section>
 
@@ -312,7 +487,7 @@ export function LandingPage () {
               {
                 icon: '📊',
                 title: 'Portfolio Tracking',
-                body: 'Every card. Every grade. Your total collection value at a glance. Raw cards, PSA, BGS, SGC — all in one place.',
+                body: 'Sports and Pokémon in separate tabs so nothing gets mixed up — plus an “all cards” view when you want totals across both. Every grade, optional photos, value at a glance.',
               },
               {
                 icon: '💰',

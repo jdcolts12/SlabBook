@@ -9,13 +9,17 @@ import { useAuth } from '../hooks/useAuth'
 import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
 import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
 import { getCardValue } from '../lib/pricing-service'
-import { computePortfolioMetrics } from '../lib/cardMetrics'
+import {
+  computePortfolioMetrics,
+  mergeSportsAndPokemonMetrics,
+} from '../lib/cardMetrics'
 import { moneyFormatter, pctFormatter } from '../lib/formatters'
 import { isEstimateStale } from '../lib/pricingConstants'
 import { removeCardImageByPublicUrl } from '../lib/cardImageStorage'
 import { sleep } from '../lib/sleep'
 import { supabase } from '../lib/supabase'
 import type { Card } from '../types/card'
+import type { PokemonCard } from '../types/pokemonCard'
 
 const money = moneyFormatter
 
@@ -35,6 +39,7 @@ export function DashboardHomePage () {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [cards, setCards] = useState<Card[]>([])
+  const [pokemonCards, setPokemonCards] = useState<PokemonCard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshingIds, setRefreshingIds] = useState<Record<string, boolean>>({})
@@ -70,17 +75,23 @@ export function DashboardHomePage () {
 
     setError(null)
     if (!opts?.silent) setLoading(true)
-    const { data, error: cardsError } = await supabase
-      .from('cards')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+    const [sports, pokemon] = await Promise.all([
+      supabase.from('cards').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase
+        .from('pokemon_cards')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false }),
+    ])
 
-    if (cardsError) {
-      setError(cardsError.message)
+    const errs = [sports.error?.message, pokemon.error?.message].filter(Boolean)
+    if (errs.length) {
+      setError(errs.join(' · '))
       setCards([])
+      setPokemonCards([])
     } else {
-      setCards((data ?? []) as Card[])
+      setCards((sports.data ?? []) as Card[])
+      setPokemonCards((pokemon.data ?? []) as PokemonCard[])
     }
     setLoading(false)
   }, [user])
@@ -95,28 +106,42 @@ export function DashboardHomePage () {
   useEffect(() => {
     if (!user) return
 
-    const channel = supabase
-      .channel(`dashboard-cards-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'cards',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          void loadCards({ silent: true })
-        },
-      )
-      .subscribe()
+    const ch = supabase.channel(`dashboard-cards-${user.id}`)
+    ch.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'cards',
+        filter: `user_id=eq.${user.id}`,
+      },
+      () => {
+        void loadCards({ silent: true })
+      },
+    )
+    ch.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'pokemon_cards',
+        filter: `user_id=eq.${user.id}`,
+      },
+      () => {
+        void loadCards({ silent: true })
+      },
+    )
+    void ch.subscribe()
 
     return () => {
-      void supabase.removeChannel(channel)
+      void supabase.removeChannel(ch)
     }
   }, [user, loadCards])
 
-  const metrics = useMemo(() => computePortfolioMetrics(cards), [cards])
+  const metrics = useMemo(() => {
+    const sportsOnly = computePortfolioMetrics(cards)
+    return mergeSportsAndPokemonMetrics(sportsOnly, pokemonCards)
+  }, [cards, pokemonCards])
   const recentCards = useMemo(() => cards.slice(0, 12), [cards])
 
   useEffect(() => {
@@ -273,6 +298,13 @@ export function DashboardHomePage () {
       )}
 
       <PortfolioSummaryBar metrics={metrics} loading={loading} money={money} pct={pctFormatter} />
+
+      {!loading && pokemonCards.length > 0 && (
+        <p className="text-center text-xs text-zinc-500">
+          Totals include {cards.length} sports and {pokemonCards.length} Pokémon cards. Best performer is from sports
+          only.
+        </p>
+      )}
 
       {!loading && cards.length > 0 && (
         <section className="space-y-4">

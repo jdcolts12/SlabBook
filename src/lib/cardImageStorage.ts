@@ -31,6 +31,16 @@ export function cardImageObjectPath (
   return `${userId}/${cardId}-${side}.${ext}`
 }
 
+/** Same bucket; distinct prefix so paths never collide with sports card IDs. */
+export function pokemonCardImageObjectPath (
+  userId: string,
+  cardId: string,
+  side: 'front' | 'back',
+  ext: string,
+): string {
+  return `${userId}/pokemon-${cardId}-${side}.${ext}`
+}
+
 export function parseCardImagePathFromPublicUrl (url: string): string | null {
   const marker = `/object/public/${CARD_IMAGES_BUCKET}/`
   const i = url.indexOf(marker)
@@ -49,6 +59,28 @@ export async function uploadCardImageSide (
   if (err) throw new Error(err)
   const ext = extForMime(file.type)
   const path = cardImageObjectPath(userId, cardId, side, ext)
+  return uploadToCardImagesBucket(supabase, path, file)
+}
+
+export async function uploadPokemonCardImageSide (
+  supabase: SupabaseClient,
+  userId: string,
+  cardId: string,
+  side: 'front' | 'back',
+  file: File,
+): Promise<string> {
+  const err = validateCardImageFile(file)
+  if (err) throw new Error(err)
+  const ext = extForMime(file.type)
+  const path = pokemonCardImageObjectPath(userId, cardId, side, ext)
+  return uploadToCardImagesBucket(supabase, path, file)
+}
+
+async function uploadToCardImagesBucket (
+  supabase: SupabaseClient,
+  path: string,
+  file: File,
+): Promise<string> {
   const { error } = await supabase.storage.from(CARD_IMAGES_BUCKET).upload(path, file, {
     upsert: true,
     contentType: file.type,
