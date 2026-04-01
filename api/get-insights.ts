@@ -8,8 +8,6 @@ import {
   enrichCardForInsights,
   topCardsByValue,
   type CardRowForInsights,
-} from '../server/insightsEnrichment'
-import {
   appendInsightMachineFooter,
   buildInsightsSystemPrompt,
   buildInsightsUserPrompt,
@@ -18,7 +16,7 @@ import {
   runInsightQualityChecks,
   runInsightsGeneration,
   runTopCardsMarketResearch,
-} from '../server/insightsPipeline'
+} from './_insights'
 import { canUseFeature, fetchUserPlan } from '../server/userTier'
 
 type ApiRequest = {
