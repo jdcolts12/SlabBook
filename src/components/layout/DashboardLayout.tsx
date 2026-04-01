@@ -10,7 +10,7 @@ import { PromoCodeInput } from '../promo/PromoCodeInput'
 
 const nav = [
   { to: '/dashboard', label: 'Dashboard', end: true },
-  { to: '/dashboard/collection?scan=1', label: 'Scan & Add', end: false },
+  { to: '/dashboard/collection?scan=1', label: 'Scan & price', end: false },
   { to: '/dashboard/collection', label: 'Collection', end: true },
   { to: '/dashboard/collection/pokemon', label: 'Pokémon TCG', end: false },
   { to: '/dashboard/market-values', label: 'Market Values', end: false },
@@ -39,7 +39,7 @@ function NavIcon ({ name }: { name: (typeof nav)[number]['label'] }) {
       )
     case 'Pokémon TCG':
       return <CircleDot className={cls} strokeWidth={1.5} aria-hidden />
-    case 'Scan & Add':
+    case 'Scan & price':
       return (
         <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />
@@ -229,7 +229,7 @@ export function DashboardLayout () {
               [
                 item.label === 'Dashboard' ? 'hidden lg:flex' : 'flex',
                 'items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                item.label === 'Scan & Add'
+                item.label === 'Scan & price'
                   ? 'bg-slab-teal text-zinc-950 hover:bg-slab-teal-light'
                   : isActive
                     ? 'bg-slab-teal/10 text-slab-teal-light'
@@ -378,7 +378,7 @@ export function DashboardLayout () {
         <Link
           to="/dashboard/collection?scan=1"
           className="fixed bottom-6 right-5 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-slab-teal text-zinc-950 shadow-xl shadow-black/40 transition hover:bg-slab-teal-light lg:hidden"
-          aria-label="Scan and add card"
+          aria-label="Scan and price card"
         >
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />

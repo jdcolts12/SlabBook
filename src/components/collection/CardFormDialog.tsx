@@ -19,6 +19,8 @@ export type CardFormSubmitPayload = {
   imageBack: File | null
   removeImageFront: boolean
   removeImageBack: boolean
+  /** When true, Collection page waits for AI estimate after save (Pro); free still saves only. */
+  awaitEstimateAfterSave?: boolean
 }
 
 type CardFormDialogProps = {
@@ -260,9 +262,15 @@ export function CardFormDialog ({
   const inputCls =
     'mt-1 w-full rounded-lg border border-zinc-700 bg-[var(--color-surface)] px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20'
 
-  async function runAutoIdentify () {
+  /**
+   * Runs vision identify; updates form state and returns merged values for immediate submit.
+   * @param banner — 'review' shows verify message; 'none' skips banner (e.g. before auto-save pipeline)
+   */
+  async function runAutoIdentify (
+    banner: 'review' | 'none' = 'review',
+  ): Promise<CardFormValues | null> {
     setError(null)
-    setIdentifyBanner(null)
+    if (banner !== 'none') setIdentifyBanner(null)
     setIdentifying(true)
     try {
       const {
@@ -300,28 +308,68 @@ export function CardFormDialog ({
           ? res.is_graded
           : Boolean(res.grading_company?.trim() || res.grade?.trim())
 
-      setForm((f) => ({
-        ...f,
-        player_name: res.player_name?.trim() || f.player_name,
-        sport: nextSport ?? f.sport,
-        year: yearNext ?? f.year,
-        set_name: res.set_name?.trim() || f.set_name,
-        card_number: res.card_number?.trim() || f.card_number,
+      const merged: CardFormValues = {
+        ...form,
+        player_name: res.player_name?.trim() || form.player_name,
+        sport: nextSport ?? form.sport,
+        year: yearNext ?? form.year,
+        set_name: res.set_name?.trim() || form.set_name,
+        card_number: res.card_number?.trim() || form.card_number,
         variation_preset: '',
-        variation_extra: res.variation?.trim() || f.variation_extra,
+        variation_extra: res.variation?.trim() || form.variation_extra,
         is_graded: graded,
-        grading_company: graded ? (res.grading_company?.trim() || f.grading_company) : '',
-        grade: graded ? (matchGrade(res.grade ?? '') || f.grade) : '',
-        condition: graded ? '' : f.condition || 'Near Mint',
-      }))
-      setPlayerInput((prev) => res.player_name?.trim() || prev)
+        grading_company: graded ? (res.grading_company?.trim() || form.grading_company) : '',
+        grade: graded ? (matchGrade(res.grade ?? '') || form.grade) : '',
+        condition: graded ? '' : form.condition || 'Near Mint',
+      }
 
+      setForm(merged)
+      setPlayerInput((prev) => res.player_name?.trim() || prev)
       setVerifyLowConfidence(res.confidence === 'low')
-      setIdentifyBanner('Card identified! Please verify the details below.')
+      if (banner === 'review') {
+        setIdentifyBanner('Card identified! Please verify the details below.')
+      }
+      return merged
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not identify card.')
+      return null
     } finally {
       setIdentifying(false)
+    }
+  }
+
+  async function runScanAddAndEstimate () {
+    setError(null)
+    if (!frontFile) {
+      setError('Add a front photo first.')
+      return
+    }
+    const merged = await runAutoIdentify('none')
+    if (!merged) return
+    const v = validateCardForm(merged)
+    if (v) {
+      setError(v)
+      setIdentifyBanner('Fix the fields above, or use “Identify only” to adjust before saving.')
+      return
+    }
+    setIdentifyBanner('Saving card & fetching market estimate…')
+    setSaving(true)
+    try {
+      await onSubmit({
+        values: merged,
+        draftCardId,
+        imageFront: frontFile,
+        imageBack: backFile,
+        removeImageFront: removeFront,
+        removeImageBack: removeBack,
+        awaitEstimateAfterSave: true,
+      })
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      setIdentifyBanner(null)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -376,7 +424,7 @@ export function CardFormDialog ({
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-5 py-4">
           <h2 id="card-form-title" className="text-lg font-semibold text-white">
-            {mode === 'add' ? (scanMode ? 'Scan & Add Card' : 'Add card') : 'Edit card'}
+            {mode === 'add' ? (scanMode ? 'Scan & price card' : 'Add card') : 'Edit card'}
           </h2>
           <button
             type="button"
@@ -430,15 +478,40 @@ export function CardFormDialog ({
                     disabled={saving || identifying}
                   />
                 </div>
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => void runAutoIdentify()}
-                    disabled={!canIdentify || saving || identifying}
-                    className="rounded-lg border border-slab-teal/40 bg-slab-teal/10 px-3 py-2 text-sm font-medium text-slab-teal-muted transition hover:bg-slab-teal/20 disabled:opacity-50"
-                  >
-                    {identifying ? 'Scanning…' : (scanMode ? 'Scan & identify card' : 'Auto-identify this card')}
-                  </button>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                  {scanMode && mode === 'add' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void runScanAddAndEstimate()}
+                        disabled={!frontFile || saving || identifying}
+                        className="inline-flex items-center justify-center rounded-xl bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-lg shadow-slab-teal/20 transition hover:bg-slab-teal-light disabled:opacity-50"
+                      >
+                        {identifying
+                          ? 'Scanning card…'
+                          : saving
+                            ? 'Saving & estimating…'
+                            : 'Scan, add & get estimate'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void runAutoIdentify('review')}
+                        disabled={!canIdentify || saving || identifying}
+                        className="rounded-lg border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/5 disabled:opacity-50"
+                      >
+                        {identifying ? 'Scanning…' : 'Identify only — review first'}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void runAutoIdentify('review')}
+                      disabled={!canIdentify || saving || identifying}
+                      className="rounded-lg border border-slab-teal/40 bg-slab-teal/10 px-3 py-2 text-sm font-medium text-slab-teal-muted transition hover:bg-slab-teal/20 disabled:opacity-50"
+                    >
+                      {identifying ? 'Scanning…' : 'Auto-identify this card'}
+                    </button>
+                  )}
                 </div>
                 {identifyBanner && (
                   <p className="mt-2 rounded-lg border border-slab-teal/30 bg-slab-teal/10 px-3 py-2 text-sm text-slab-teal-light">
@@ -809,7 +882,15 @@ export function CardFormDialog ({
                   disabled={saving}
                   className="rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50"
                 >
-                  {saving ? 'Saving…' : mode === 'add' ? (scanMode ? 'Scan & Add Card' : 'Add card') : 'Save changes'}
+                  {saving
+                    ? scanMode && mode === 'add'
+                      ? 'Saving & estimating…'
+                      : 'Saving…'
+                    : mode === 'add'
+                      ? scanMode
+                        ? 'Save without waiting for estimate'
+                        : 'Add card'
+                      : 'Save changes'}
                 </button>
               </div>
             </div>

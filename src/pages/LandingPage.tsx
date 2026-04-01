@@ -423,7 +423,7 @@ export function LandingPage () {
                       to="/dashboard/collection?scan=1"
                       className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40 sm:w-auto sm:min-w-[11rem] sm:px-8"
                     >
-                      Scan a card
+                      Scan & price
                     </Link>
                     <button
                       type="button"

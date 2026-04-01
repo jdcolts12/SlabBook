@@ -319,6 +319,7 @@ export function CollectionPage () {
       imageBack,
       removeImageFront,
       removeImageBack,
+      awaitEstimateAfterSave,
     } = submit
     const payload = formValuesToPayload(user.id, values)
 
@@ -331,18 +332,14 @@ export function CollectionPage () {
           throw new Error('Collection limit reached. Upgrade to add more cards.')
         }
       }
-      const { data: row, error } = await supabase
-        .from('cards')
-        .insert({
-          id: draftCardId,
-          ...payload,
-          image_front_url: null,
-          image_back_url: null,
-          last_updated: new Date().toISOString(),
-        })
-        .select('*')
-        .single()
-      if (error) throw new Error(error.message)
+      const { error: insertErr } = await supabase.from('cards').insert({
+        id: draftCardId,
+        ...payload,
+        image_front_url: null,
+        image_back_url: null,
+        last_updated: new Date().toISOString(),
+      })
+      if (insertErr) throw new Error(insertErr.message)
 
       let image_front_url: string | null = null
       let image_back_url: string | null = null
@@ -381,9 +378,33 @@ export function CollectionPage () {
         throw imgErr instanceof Error ? imgErr : new Error('Image upload failed.')
       }
 
+      const { data: fullRow, error: fetchErr } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('id', draftCardId)
+        .eq('user_id', user.id)
+        .single()
+      if (fetchErr) throw new Error(fetchErr.message)
+      const added = fullRow as Card
+
+      const waitForEstimate = awaitEstimateAfterSave === true
+
+      if (waitForEstimate && !isFreeUser) {
+        const estimated = await estimateCard(added, { forceRefresh: true })
+        await loadCards({ silent: true })
+        if (estimated?.current_value != null) {
+          setToastMessage(`Added — est. ${money.format(Number(estimated.current_value))}`)
+        } else if (estimated) {
+          setToastMessage('Card added. Estimate completed.')
+        } else {
+          setToastMessage('Card added. Use Refresh on the card to fetch an estimate.')
+        }
+        setPostAdd(null)
+        return
+      }
+
       setToastMessage('Card added to your collection.')
       await loadCards({ silent: true })
-      const added = row as Card
       if (isFreeUser) {
         setPostAdd({ cardId: added.id, estimating: false, done: false })
       } else {
@@ -435,7 +456,7 @@ export function CollectionPage () {
     await loadCards({ silent: true })
   }
 
-  async function estimateCard (card: Card, opts?: { forceRefresh?: boolean }) {
+  async function estimateCard (card: Card, opts?: { forceRefresh?: boolean }): Promise<Card | null> {
     setLoadError(null)
     setEstimateErrors((prev) => ({ ...prev, [card.id]: null }))
     setRefreshingIds((prev) => ({ ...prev, [card.id]: true }))
@@ -452,11 +473,14 @@ export function CollectionPage () {
       if (est.error) {
         throw new Error(est.error)
       }
-      setCards((prev) => prev.map((entry) => (entry.id === card.id ? mergeEstimateIntoCard(entry, est) : entry)))
+      const merged = mergeEstimateIntoCard(card, est)
+      setCards((prev) => prev.map((entry) => (entry.id === card.id ? merged : entry)))
+      return merged
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unable to estimate value.'
       setLoadError(msg)
       setEstimateErrors((prev) => ({ ...prev, [card.id]: msg }))
+      return null
     } finally {
       setRefreshingIds((prev) => {
         const next = { ...prev }
@@ -576,7 +600,7 @@ export function CollectionPage () {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
             </svg>
-            Scan & Add Card
+            Scan & price card
           </button>
           <button
             type="button"
