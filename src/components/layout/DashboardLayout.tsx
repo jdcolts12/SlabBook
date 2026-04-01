@@ -224,7 +224,8 @@ export function DashboardLayout () {
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               [
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                item.label === 'Dashboard' ? 'hidden lg:flex' : 'flex',
+                'items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 item.label === 'Scan & Add'
                   ? 'bg-slab-teal text-zinc-950 hover:bg-slab-teal-light'
                   : isActive
