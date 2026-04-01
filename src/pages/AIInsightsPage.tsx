@@ -32,8 +32,6 @@ function formatCompactDate (value: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-type GeneratingPhase = 'idle' | 'market' | 'insights'
-
 function sectionSurfaceClass (title: string): string {
   const t = title.toLowerCase()
   if (t.includes('sell')) {
@@ -75,7 +73,6 @@ export function AIInsightsPage () {
   const [readingIds, setReadingIds] = useState<Record<string, boolean>>({})
   const [cardCount, setCardCount] = useState<number | null>(null)
   const [infoBanner, setInfoBanner] = useState<string | null>(null)
-  const [generatingPhase, setGeneratingPhase] = useState<GeneratingPhase>('idle')
   const [sessionInsightMeta, setSessionInsightMeta] = useState<{
     used_web_search?: boolean
     quality_disclaimer?: boolean
@@ -123,16 +120,6 @@ export function AIInsightsPage () {
     }, 0)
     return () => window.clearTimeout(timer)
   }, [loadInsights, loadCardCount])
-
-  useEffect(() => {
-    if (!generating) {
-      setGeneratingPhase('idle')
-      return
-    }
-    setGeneratingPhase('market')
-    const t = window.setTimeout(() => setGeneratingPhase('insights'), 2800)
-    return () => window.clearTimeout(t)
-  }, [generating])
 
   useEffect(() => {
     if (!user) return
@@ -213,6 +200,8 @@ export function AIInsightsPage () {
             insight?: string
             used_web_search?: boolean
             quality_disclaimer?: boolean
+            notice?: string
+            cached?: boolean
           }
         | null
 
@@ -230,6 +219,10 @@ export function AIInsightsPage () {
       if (payload?.no_cards && payload.insight) {
         setInfoBanner(payload.insight)
         return
+      }
+
+      if (payload?.notice) {
+        setInfoBanner(payload.notice)
       }
 
       if (payload && typeof payload.used_web_search === 'boolean') {
@@ -365,9 +358,7 @@ export function AIInsightsPage () {
                   className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-900/30 border-t-zinc-900"
                   aria-hidden
                 />
-                {generatingPhase === 'insights'
-                  ? 'Generating your insights…'
-                  : 'Analyzing current market…'}
+                Getting your insights... this takes 10-15 seconds
               </>
             ) : (
               <>
@@ -431,9 +422,7 @@ export function AIInsightsPage () {
             className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-slab-teal px-6 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
           >
             {generating
-              ? generatingPhase === 'insights'
-                ? 'Generating your insights…'
-                : 'Analyzing current market…'
+              ? 'Getting your insights... this takes 10-15 seconds'
               : 'Get insights'}
           </button>
         </div>

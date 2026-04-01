@@ -109,6 +109,14 @@ function appendHumanInsightFooter (content: string, opts: { now: Date; usedWebSe
   return `${content.trim()}\n\n${lines.join('\n')}`
 }
 
+function sleepMs (ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isRateLimitError (msg: string): boolean {
+  return /rate limit|input tokens per minute|429|too many requests/i.test(msg)
+}
+
 function appendInsightMachineFooter (content: string, flags: { websearch: boolean; verify: boolean }): string {
   const parts = [content.trim()]
   if (flags.websearch) parts.push('<!--slabbook:flags:websearch-->')
@@ -274,6 +282,35 @@ function topByValue (cards: EnrichedCard[], n: number): EnrichedCard[] {
   return [...cards].filter((c) => c.current_value != null && c.current_value > 0).sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0)).slice(0, n)
 }
 
+function topByGainers (cards: EnrichedCard[], n: number): EnrichedCard[] {
+  return [...cards]
+    .filter((c) => c.value_change_percent != null)
+    .sort((a, b) => Number.parseFloat(b.value_change_percent ?? '0') - Number.parseFloat(a.value_change_percent ?? '0'))
+    .slice(0, n)
+}
+
+function topByLosers (cards: EnrichedCard[], n: number): EnrichedCard[] {
+  return [...cards]
+    .filter((c) => c.value_change_percent != null)
+    .sort((a, b) => Number.parseFloat(a.value_change_percent ?? '0') - Number.parseFloat(b.value_change_percent ?? '0'))
+    .slice(0, n)
+}
+
+function representativeSample (cards: EnrichedCard[]): EnrichedCard[] {
+  const chosen: EnrichedCard[] = []
+  const seen = new Set<string>()
+  const pushUnique = (c: EnrichedCard) => {
+    const key = `${c.player_name}|${c.year}|${c.set_name}|${c.grade_line}`
+    if (seen.has(key)) return
+    seen.add(key)
+    chosen.push(c)
+  }
+  for (const c of topByValue(cards, 10)) pushUnique(c)
+  for (const c of topByGainers(cards, 5)) pushUnique(c)
+  for (const c of topByLosers(cards, 3)) pushUnique(c)
+  return chosen.slice(0, 15)
+}
+
 function summaryFor (cards: EnrichedCard[]): Summary {
   let totalInvested = 0
   let totalValue = 0
@@ -307,33 +344,23 @@ function summaryFor (cards: EnrichedCard[]): Summary {
 
 function promptCardJson (c: EnrichedCard): Record<string, unknown> {
   return {
-    card_display_label: c.card_display_label,
     player_name: c.player_name,
     year: c.year,
     set_name: c.set_name,
-    sport: c.sport,
-    grade_line: c.grade_line,
-    card_number: c.card_number,
-    variation: c.variation,
+    grade: c.grade_line,
+    grading_company: c.grade_line.startsWith('Raw') ? null : c.grade_line.split(' ')[0],
     purchase_price: c.purchase_price,
     current_value: c.current_value,
-    purchase_date: c.purchase_date,
+    gain_loss_percent: c.value_change_percent,
     card_age_years: c.card_age_years,
-    player_pro_rookie_year: c.player_pro_rookie_year,
-    is_true_rookie: c.is_true_rookie_card,
-    rookie_years_ago: c.rookie_years_ago,
     career_stage: c.career_stage,
-    value_change_percent: c.value_change_percent,
-    holding_period_days: c.holding_period_days,
     holding_period_text: c.holding_period_text,
-    is_up: c.is_up,
-    annualized_return: c.annualized_return_percent,
   }
 }
 
 function webSearchTool (): Record<string, unknown> {
   const rawMax = process.env.INSIGHTS_WEB_SEARCH_MAX_USES?.trim()
-  const maxUses = rawMax ? Number.parseInt(rawMax, 10) : 5
+  const maxUses = rawMax ? Number.parseInt(rawMax, 10) : 2
   const tool: Record<string, unknown> = { name: 'web_search', max_uses: Number.isFinite(maxUses) && maxUses > 0 ? Math.min(15, maxUses) : 5 }
   const ver = process.env.PRICING_WEB_SEARCH_VERSION?.trim() || process.env.INSIGHTS_WEB_SEARCH_VERSION?.trim()
   tool.type = ver === '20260209' ? 'web_search_20260209' : 'web_search_20250305'
@@ -390,7 +417,7 @@ ${lines.join('\n')}
 Output plain text bullets only.`
   const out = await runWithPauseTurn(args.apiKey, {
     model: args.model,
-    max_tokens: 4096,
+    max_tokens: 900,
     temperature: 0.2,
     system: 'You are a research assistant. Use web search to collect recent public facts.',
     tools: [webSearchTool()],
@@ -399,6 +426,15 @@ Output plain text bullets only.`
   if (!out.res.ok) return { ok: false, error: out.payload?.error?.message || out.payload?.message || 'Research request failed.' }
   const n = out.payload?.usage?.server_tool_use?.web_search_requests
   return { ok: true, digest: extractText(out.payload) || '(No digest text returned.)', usedWebSearch: typeof n === 'number' && n > 0 }
+}
+
+function trimWebDigest (digest: string): string {
+  const lines = digest
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  const picked = lines.slice(0, 3).map((l) => (l.length > 200 ? `${l.slice(0, 200)}...` : l))
+  return picked.join('\n')
 }
 
 function systemPrompt (now: Date): string {
@@ -410,9 +446,10 @@ Use current year ${y}. Be specific. Never mislabel veterans as rookies.`
 function userPrompt (args: { now: Date; enrichedJson: string; webSearchResults: string; summary: Summary; repairNote?: string }): string {
   const repair = args.repairNote ? `\n\nIMPORTANT — FIX PREVIOUS OUTPUT:\n${args.repairNote}\nRegenerate the full report from scratch.\n` : ''
   return `Today is ${formatInsightDate(args.now)}.
-Here is my sports card portfolio with full context:
+Portfolio cards with computed context:
 ${args.enrichedJson}
-Recent market news for my top cards:
+This is a representative sample of the user's collection — their largest and most notable cards.
+Market context for top cards:
 ${args.webSearchResults || `(No live web context for this run — rely on portfolio data and general ${args.now.getUTCFullYear()} market knowledge.)`}
 Portfolio summary:
 - Total cards: ${args.summary.total_cards}
@@ -434,7 +471,7 @@ Use exactly these Markdown section headers (##) in this order:
 async function runInsightsGeneration (args: { apiKey: string; model: string; system: string; user: string }): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   const { res, payload } = await callAnthropic(args.apiKey, {
     model: args.model,
-    max_tokens: 6144,
+    max_tokens: 1800,
     temperature: 0.35,
     system: args.system,
     messages: [{ role: 'user', content: args.user }],
@@ -506,6 +543,26 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: 'AI insights require a Pro plan. Upgrade to unlock portfolio analysis.' })
     }
 
+    const { data: latestExisting } = await admin
+      .from('ai_insights')
+      .select('id, created_at, content')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (latestExisting?.created_at) {
+      const ageMs = Date.now() - new Date(latestExisting.created_at).getTime()
+      if (ageMs < 24 * 60 * 60 * 1000) {
+        return res.status(200).json({
+          insight: latestExisting.content,
+          id: latestExisting.id,
+          created_at: latestExisting.created_at,
+          cached: true,
+          notice: `Using cached insights from ${new Date(latestExisting.created_at).toLocaleString()} (updated within 24h).`,
+        })
+      }
+    }
+
     const { data: cardsData, error: cardsError } = await admin
       .from('cards')
       .select('player_name, year, set_name, sport, is_graded, grade, grading_company, purchase_price, current_value, purchase_date, card_number, variation')
@@ -519,8 +576,9 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const now = new Date()
     const enriched = rows.map((r) => enrichCard(r, now))
     const summary = summaryFor(enriched)
-    const top5 = topByValue(enriched, 5)
-    const enrichedJson = JSON.stringify(enriched.map(promptCardJson), null, 2)
+    const top5 = topByValue(enriched, 3)
+    const promptCards = representativeSample(enriched)
+    const enrichedJson = JSON.stringify(promptCards.map(promptCardJson))
 
     const reserve = await tryReserveClaudeCall(admin, 'get-insights')
     if (!reserve.ok) return res.status(503).json({ error: 'Daily Claude API limit reached for this deployment. Try again tomorrow (UTC).' })
@@ -537,12 +595,13 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const model = process.env.ANTHROPIC_MODEL?.trim() || 'claude-sonnet-4-20250514'
     let webDigest = ''
     let usedWebSearch = false
+    await sleepMs(2000)
     if (!skipWebSearch() && top5.length > 0) {
       const rReserve = await tryReserveClaudeCall(admin, 'get-insights-research')
       if (rReserve.ok) {
-        const research = await runTopCardsMarketResearch({ apiKey: anthropicApiKey, model, topCards: top5, now })
+        const research = await runTopCardsMarketResearch({ apiKey: anthropicApiKey, model, topCards: top5.slice(0, 3), now })
         if (research.ok) {
-          webDigest = research.digest
+          webDigest = trimWebDigest(research.digest)
           usedWebSearch = research.usedWebSearch
         }
       }
@@ -551,6 +610,8 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const system = systemPrompt(now)
     let bestText = ''
     let lastChecks: { ok: boolean; reasons: string[] } = { ok: true, reasons: [] }
+    let workingEnrichedJson = enrichedJson
+    let didRateLimitFallback = false
     for (let attempt = 0; attempt < 3; attempt++) {
       const repairNote = attempt > 0 && lastChecks.reasons.length > 0 ? lastChecks.reasons.join(' ') : undefined
       const genReserve = await tryReserveClaudeCall(admin, `get-insights-gen-${attempt}`)
@@ -562,9 +623,27 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
         apiKey: anthropicApiKey,
         model,
         system,
-        user: userPrompt({ now, enrichedJson, webSearchResults: webDigest, summary, repairNote }),
+        user: userPrompt({ now, enrichedJson: workingEnrichedJson, webSearchResults: webDigest, summary, repairNote }),
       })
       if (!gen.ok) {
+        const rateLimited = isRateLimitError(gen.error)
+        if (rateLimited && !didRateLimitFallback) {
+          didRateLimitFallback = true
+          await sleepMs(60_000)
+          workingEnrichedJson = JSON.stringify(promptCards.slice(0, 10).map(promptCardJson))
+          webDigest = ''
+          usedWebSearch = false
+          continue
+        }
+        if (rateLimited && latestExisting?.content) {
+          return res.status(200).json({
+            insight: latestExisting.content,
+            id: latestExisting.id,
+            created_at: latestExisting.created_at,
+            cached: true,
+            notice: "High demand right now — your insights will be ready in a few minutes. We'll use your cached insights for now.",
+          })
+        }
         if (bestText) break
         return res.status(502).json({ error: gen.error })
       }
