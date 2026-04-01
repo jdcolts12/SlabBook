@@ -55,10 +55,11 @@ function appendHumanInsightFooter (
 const EMPTY_MESSAGE = `Add a few cards to your collection first — then SlabBook AI can break down your portfolio, opportunities, and risks.`
 
 export default async function handler (req: ApiRequest, res: ApiResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
+  try {
+    if (req.method !== 'POST') {
+      res.setHeader('Allow', 'POST')
+      return res.status(405).json({ error: 'Method not allowed' })
+    }
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -253,11 +254,16 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
 
   if (insertError) return res.status(500).json({ error: insertError.message })
 
-  return res.status(200).json({
-    insight: content,
-    id: inserted?.id,
-    created_at: inserted?.created_at,
-    used_web_search: usedWebSearch,
-    quality_disclaimer: qualityVerify,
-  })
+    return res.status(200).json({
+      insight: content,
+      id: inserted?.id,
+      created_at: inserted?.created_at,
+      used_web_search: usedWebSearch,
+      quality_disclaimer: qualityVerify,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unexpected error generating AI insights.'
+    console.error('[get-insights] unhandled error:', err)
+    return res.status(500).json({ error: message })
+  }
 }

@@ -203,7 +203,10 @@ export function AIInsightsPage () {
         body: JSON.stringify({}),
       })
 
-      const payload = (await response.json().catch(() => null)) as
+      const contentType = response.headers.get('content-type') || ''
+      const payload = (contentType.includes('application/json')
+        ? await response.json().catch(() => null)
+        : null) as
         | {
             error?: string
             no_cards?: boolean
@@ -214,7 +217,14 @@ export function AIInsightsPage () {
         | null
 
       if (!response.ok) {
-        throw new Error(payload?.error ?? 'Failed to get AI insights.')
+        if (payload?.error) throw new Error(payload.error)
+        const textBody = await response.text().catch(() => '')
+        const brief = textBody.trim().slice(0, 240)
+        throw new Error(
+          brief
+            ? `Insights request failed (${response.status}): ${brief}`
+            : `Insights request failed (${response.status}).`,
+        )
       }
 
       if (payload?.no_cards && payload.insight) {
