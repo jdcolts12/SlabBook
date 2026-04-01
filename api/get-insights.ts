@@ -1,19 +1,24 @@
 import { createClient } from '@supabase/supabase-js'
-
-type CardRowForInsights = {
-  player_name: string
-  year: number | null
-  set_name: string | null
-  sport: string | null
-  is_graded: boolean
-  grade: string | null
-  grading_company: string | null
-  purchase_price: number | null
-  current_value: number | null
-  purchase_date: string | null
-  card_number: string | null
-  variation: string | null
-}
+import {
+  buildPortfolioSummary,
+  canUseFeature,
+  cardToInsightsPromptJson,
+  enrichCardForInsights,
+  fakeInsightsMarkdown,
+  fetchUserPlan,
+  isDemoMode,
+  topCardsByValue,
+  tryReserveClaudeCall,
+  type CardRowForInsights,
+  appendInsightMachineFooter,
+  buildInsightsSystemPrompt,
+  buildInsightsUserPrompt,
+  formatInsightDate,
+  resolveInsightsSkipWebSearch,
+  runInsightQualityChecks,
+  runInsightsGeneration,
+  runTopCardsMarketResearch,
+} from './_insights'
 
 type ApiRequest = {
   method?: string
@@ -34,14 +39,9 @@ function getBearerToken (authHeader?: string): string | null {
 
 function appendHumanInsightFooter (
   content: string,
-  opts: {
-    now: Date
-    usedWebSearch: boolean
-    qualityVerify: boolean
-    formatInsightDate: (d: Date) => string
-  },
+  opts: { now: Date; usedWebSearch: boolean; qualityVerify: boolean },
 ): string {
-  const lines = ['---', `*Generated ${opts.formatInsightDate(opts.now)} based on current market data.*`]
+  const lines = ['---', `*Generated ${formatInsightDate(opts.now)} based on current market data.*`]
   if (opts.usedWebSearch) {
     lines.push('*Includes live market context for your top cards.*')
   }
@@ -55,8 +55,6 @@ const EMPTY_MESSAGE = `Add a few cards to your collection first — then SlabBoo
 
 export default async function handler (req: ApiRequest, res: ApiResponse) {
   try {
-    const insights = await import('./_insights')
-
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST')
       return res.status(405).json({ error: 'Method not allowed' })
@@ -91,8 +89,8 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     return res.status(401).json({ error: 'Invalid or expired auth token.' })
   }
 
-  const plan = await insights.fetchUserPlan(admin, user.id)
-  if (!insights.canUseFeature(plan, 'ai_insights')) {
+  const plan = await fetchUserPlan(admin, user.id)
+  if (!canUseFeature(plan, 'ai_insights')) {
     return res.status(403).json({
       error: 'AI insights require a Pro plan. Upgrade to unlock portfolio analysis.',
     })
@@ -120,27 +118,26 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
   }
 
   const now = new Date()
-  const enriched = rows.map((r) => insights.enrichCardForInsights(r, now))
-  const summary = insights.buildPortfolioSummary(enriched)
-  const top5 = insights.topCardsByValue(enriched, 5)
-  const enrichedJson = JSON.stringify(enriched.map(insights.cardToInsightsPromptJson), null, 2)
+  const enriched = rows.map((r) => enrichCardForInsights(r, now))
+  const summary = buildPortfolioSummary(enriched)
+  const top5 = topCardsByValue(enriched, 5)
+  const enrichedJson = JSON.stringify(enriched.map(cardToInsightsPromptJson), null, 2)
 
-  const reserve = await insights.tryReserveClaudeCall(admin, 'get-insights')
+  const reserve = await tryReserveClaudeCall(admin, 'get-insights')
   if (!reserve.ok) {
     return res.status(503).json({
       error: 'Daily Claude API limit reached for this deployment. Try again tomorrow (UTC).',
     })
   }
 
-  if (insights.isDemoMode()) {
-    const content = insights.fakeInsightsMarkdown()
+  if (isDemoMode()) {
+    const content = fakeInsightsMarkdown()
     const withFooter = appendHumanInsightFooter(content, {
       now,
       usedWebSearch: false,
       qualityVerify: false,
-      formatInsightDate: insights.formatInsightDate,
     })
-    const stored = insights.appendInsightMachineFooter(withFooter, { websearch: false, verify: false })
+    const stored = appendInsightMachineFooter(withFooter, { websearch: false, verify: false })
     const { data: inserted, error: insertError } = await admin
       .from('ai_insights')
       .insert({
@@ -167,14 +164,14 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       ? process.env.ANTHROPIC_MODEL.trim()
       : 'claude-sonnet-4-20250514'
 
-  const skipWeb = insights.resolveInsightsSkipWebSearch()
+  const skipWeb = resolveInsightsSkipWebSearch()
   let webDigest = ''
   let usedWebSearch = false
 
   if (!skipWeb && top5.length > 0) {
-    const rReserve = await insights.tryReserveClaudeCall(admin, 'get-insights-research')
+    const rReserve = await tryReserveClaudeCall(admin, 'get-insights-research')
     if (rReserve.ok) {
-      const research = await insights.runTopCardsMarketResearch({
+      const research = await runTopCardsMarketResearch({
         apiKey: anthropicApiKey,
         model,
         topCards: top5,
@@ -191,7 +188,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     }
   }
 
-  const system = insights.buildInsightsSystemPrompt(now)
+  const system = buildInsightsSystemPrompt(now)
   let bestText = ''
   let lastChecks: { ok: boolean; reasons: string[] } = { ok: true, reasons: [] }
   const maxAttempts = 3
@@ -200,7 +197,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const repairNote =
       attempt > 0 && lastChecks.reasons.length > 0 ? lastChecks.reasons.join(' ') : undefined
 
-    const genReserve = await insights.tryReserveClaudeCall(admin, `get-insights-gen-${attempt}`)
+    const genReserve = await tryReserveClaudeCall(admin, `get-insights-gen-${attempt}`)
     if (!genReserve.ok) {
       if (bestText) break
       return res.status(503).json({
@@ -208,7 +205,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       })
     }
 
-    const userPrompt = insights.buildInsightsUserPrompt({
+    const userPrompt = buildInsightsUserPrompt({
       now,
       enrichedJson,
       webSearchResults: webDigest,
@@ -216,7 +213,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       repairNote,
     })
 
-    const gen = await insights.runInsightsGeneration({
+    const gen = await runInsightsGeneration({
       apiKey: anthropicApiKey,
       model,
       system,
@@ -229,7 +226,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     }
 
     bestText = gen.text
-    lastChecks = insights.runInsightQualityChecks(gen.text, enriched, now)
+    lastChecks = runInsightQualityChecks(gen.text, enriched, now)
     if (lastChecks.ok) break
   }
 
@@ -238,9 +235,8 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     now,
     usedWebSearch,
     qualityVerify,
-    formatInsightDate: insights.formatInsightDate,
   })
-  const content = insights.appendInsightMachineFooter(withHuman, {
+  const content = appendInsightMachineFooter(withHuman, {
     websearch: usedWebSearch,
     verify: qualityVerify,
   })
