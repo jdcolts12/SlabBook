@@ -1,12 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
-import { tryReserveClaudeCall } from '../server/claudeCostProtection'
-import { isDemoMode } from '../server/demoMode'
-import { fakeInsightsMarkdown } from '../server/demoResponses'
 import {
   buildPortfolioSummary,
+  canUseFeature,
   cardToInsightsPromptJson,
   enrichCardForInsights,
+  fakeInsightsMarkdown,
+  fetchUserPlan,
+  isDemoMode,
   topCardsByValue,
+  tryReserveClaudeCall,
   type CardRowForInsights,
   appendInsightMachineFooter,
   buildInsightsSystemPrompt,
@@ -17,7 +19,6 @@ import {
   runInsightsGeneration,
   runTopCardsMarketResearch,
 } from './_insights'
-import { canUseFeature, fetchUserPlan } from '../server/userTier'
 
 type ApiRequest = {
   method?: string

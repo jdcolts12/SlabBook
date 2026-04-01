@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 export const PLAYER_ROOKIE_YEARS: Record<string, number> = {
   'Patrick Mahomes': 2017,
   'Josh Allen': 2018,
@@ -580,4 +582,155 @@ export function appendInsightMachineFooter (content: string, flags: { websearch:
   if (flags.websearch) parts.push('<!--slabbook:flags:websearch-->')
   if (flags.verify) parts.push('<!--slabbook:flags:verify-->')
   return parts.filter(Boolean).join('\n\n')
+}
+
+export type UserPlanRow = {
+  subscription_tier: string | null
+  subscription_status: string | null
+  lifetime_access: boolean | null
+  trial_ends_at: string | null
+  subscription_ends_at: string | null
+}
+
+export function isDemoMode (): boolean {
+  const v = process.env.DEMO_MODE?.trim().toLowerCase()
+  const v2 = process.env.VITE_DEMO_MODE?.trim().toLowerCase()
+  return v === 'true' || v === '1' || v2 === 'true' || v2 === '1'
+}
+
+export function fakeInsightsMarkdown (): string {
+  return `## Portfolio health
+Demo mode — AI is disabled. This sample shows the ${new Date().getUTCFullYear()} layout: your portfolio has $0.00 invested across 0 live cards until you turn off \`DEMO_MODE\`. Diversification and risk notes will reference real player names and dollar amounts once connected.
+
+## Sell candidates
+1. Demo Player 2020 Demo Set PSA 10 — if this were real at $500 purchase and $650 value, we would cite holding period and annualized return here with a sell rationale tied to ${new Date().getUTCFullYear()} market context.
+
+## Strong holds
+1. Demo Player 2020 Demo Set PSA 10 — upside would be explained with a catalyst and timeframe, using exact labels from your collection.
+
+## Watch list
+- Demo Player 2020 — monitor for injury or performance shifts; placeholder until live data runs.
+
+## Hidden gem
+Demo Player 2020 Demo Set — undervalued narrative would cite comps and population when available.
+
+## This week's action
+Turn off \`DEMO_MODE\` and run insights with a real collection to test web context + Claude.`
+}
+
+function statusActive (status: string | null): boolean {
+  const s = (status ?? '').toLowerCase()
+  return s === 'active' || s === 'trialing'
+}
+
+function effectiveTier (row: UserPlanRow | null): 'free' | 'pro' | 'lifetime' {
+  if (!row) return 'free'
+  const t = (row.subscription_tier ?? 'free').toLowerCase()
+  if (row.lifetime_access || t === 'lifetime') return 'lifetime'
+  if (t === 'pro' || t === 'collector' || t === 'investor') {
+    if (statusActive(row.subscription_status)) return 'pro'
+    if (row.trial_ends_at && new Date(row.trial_ends_at).getTime() > Date.now()) return 'pro'
+  }
+  return 'free'
+}
+
+export async function fetchUserPlan (admin: SupabaseClient, userId: string): Promise<UserPlanRow | null> {
+  const { data, error } = await admin
+    .from('users')
+    .select('subscription_tier, subscription_status, lifetime_access, trial_ends_at, subscription_ends_at')
+    .eq('id', userId)
+    .maybeSingle()
+  if (error || !data) return null
+  return data as UserPlanRow
+}
+
+export function canUseFeature (row: UserPlanRow | null, feature: 'ai_insights'): boolean {
+  if (feature !== 'ai_insights') return false
+  const tier = effectiveTier(row)
+  return tier === 'lifetime' || tier === 'pro'
+}
+
+const DEFAULT_CLAUDE_CAP = 50
+
+function dailyClaudeCap (): number {
+  const raw = process.env.CLAUDE_DAILY_CAP?.trim()
+  if (!raw) return DEFAULT_CLAUDE_CAP
+  const n = Number.parseInt(raw, 10)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_CLAUDE_CAP
+}
+
+function utcDayStartIso (): string {
+  const d = new Date()
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0)).toISOString()
+}
+
+async function sendCapAlertEmailIfNeeded (admin: SupabaseClient): Promise<void> {
+  const to = process.env.ALERT_EMAIL?.trim() || process.env.CLAUDE_CAP_ALERT_EMAIL?.trim()
+  if (!to) return
+  const day = new Date().toISOString().slice(0, 10)
+
+  const { data: existing } = await admin.from('claude_cap_alert_sent').select('day').eq('day', day).maybeSingle()
+  if (existing) return
+
+  const { error: insErr } = await admin.from('claude_cap_alert_sent').insert({ day })
+  if (insErr) {
+    if ((insErr as { code?: string }).code === '23505') return
+    console.warn('[claude cap] could not record alert row', insErr.message)
+    return
+  }
+
+  const key = process.env.RESEND_API_KEY?.trim()
+  if (!key) return
+  const from = process.env.RESEND_FROM?.trim() ?? 'SlabBook <onboarding@resend.dev>'
+  const cap = dailyClaudeCap()
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject: `SlabBook — Claude daily cap reached (${cap}/day)`,
+      text: `The app hit ${cap} Claude API calls today (UTC) and is blocking further calls until tomorrow.\n\nCheck logs for loops or bugs.\n\n— SlabBook`,
+    }),
+  }).catch(() => null)
+
+  if (res && !res.ok) {
+    const t = await res.text().catch(() => '')
+    console.warn('[claude cap] Resend error', res.status, t)
+  }
+}
+
+export async function tryReserveClaudeCall (
+  admin: SupabaseClient,
+  route: string,
+): Promise<{ ok: true } | { ok: false; reason: 'cap' }> {
+  if (isDemoMode()) return { ok: true }
+
+  const cap = dailyClaudeCap()
+  const since = utcDayStartIso()
+  const { count, error: countErr } = await admin
+    .from('claude_api_calls')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', since)
+
+  if (countErr) {
+    console.error('[claude cap] count failed', countErr.message)
+    return { ok: true }
+  }
+
+  const n = count ?? 0
+  if (n >= cap) {
+    void sendCapAlertEmailIfNeeded(admin)
+    return { ok: false, reason: 'cap' }
+  }
+
+  const { error: insErr } = await admin.from('claude_api_calls').insert({ route })
+  if (insErr) {
+    console.error('[claude cap] insert failed', insErr.message)
+    return { ok: true }
+  }
+  return { ok: true }
 }
