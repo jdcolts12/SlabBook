@@ -161,6 +161,8 @@ export function CardFormDialog ({
   const [removeBack, setRemoveBack] = useState(false)
   const [identifyBanner, setIdentifyBanner] = useState<string | null>(null)
   const [identifying, setIdentifying] = useState(false)
+  /** In scan add mode, hide sport/player/etc. until AI identifies or user chooses manual entry. */
+  const [scanDetailsRevealed, setScanDetailsRevealed] = useState(false)
   const [verifyLowConfidence, setVerifyLowConfidence] = useState(false)
   const [serialMode, setSerialMode] = useState(false)
   const [serialNo, setSerialNo] = useState('')
@@ -199,12 +201,14 @@ export function CardFormDialog ({
       setDraftCardId(crypto.randomUUID())
       setForm(emptyForm)
       setPlayerInput('')
+      setScanDetailsRevealed(!scanMode)
     } else if (initial) {
       const next = cardToForm(initial)
       setForm(next)
       setPlayerInput(next.player_name)
+      setScanDetailsRevealed(true)
     }
-  }, [open, mode, initial])
+  }, [open, mode, initial, scanMode])
 
   useEffect(() => {
     if (!open) return
@@ -254,6 +258,8 @@ export function CardFormDialog ({
     Boolean(mode === 'edit' && initial?.image_front_url && !removeFront)
 
   const datalistId = 'slabbook-player-suggestions'
+
+  const hideScanCardForm = scanMode && mode === 'add' && !scanDetailsRevealed
 
   const ringBlock = verifyLowConfidence
     ? 'rounded-lg p-2 ring-2 ring-amber-500/45 ring-offset-2 ring-offset-[var(--color-surface-raised)]'
@@ -326,6 +332,7 @@ export function CardFormDialog ({
       setForm(merged)
       setPlayerInput((prev) => res.player_name?.trim() || prev)
       setVerifyLowConfidence(res.confidence === 'low')
+      setScanDetailsRevealed(true)
       if (banner === 'review') {
         setIdentifyBanner('Card identified! Please verify the details below.')
       }
@@ -348,6 +355,7 @@ export function CardFormDialog ({
     if (!merged) return
     const v = validateCardForm(merged)
     if (v) {
+      setScanDetailsRevealed(true)
       setError(v)
       setIdentifyBanner('Fix the fields above, or use “Identify only” to adjust before saving.')
       return
@@ -440,11 +448,20 @@ export function CardFormDialog ({
 
         <div className="max-h-[calc(92dvh-4rem)] overflow-y-auto">
           <form onSubmit={handleSubmit} className="grid gap-0 lg:grid-cols-2">
-            <div className="space-y-4 border-b border-[var(--color-border-subtle)] p-5 lg:border-b-0 lg:border-r">
+            <div
+              className={[
+                'space-y-4 p-5',
+                hideScanCardForm
+                  ? 'lg:pr-6'
+                  : 'border-b border-[var(--color-border-subtle)] lg:border-b-0 lg:border-r',
+              ].join(' ')}
+            >
               <div>
-                <h3 className="text-sm font-semibold text-zinc-300">Photos (optional)</h3>
+                <h3 className="text-sm font-semibold text-zinc-300">Photos</h3>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Front and back upload on save. Images are stored in your SlabBook folder.
+                  {hideScanCardForm
+                    ? 'Add a clear front photo first — we read the card before showing fields, so nothing assumes sports vs Pokémon.'
+                    : 'Front and back upload on save. Images are stored in your SlabBook folder.'}
                 </p>
                 <div className="mt-3 flex flex-col gap-4 sm:flex-row">
                   <CardPhotoDropzone
@@ -520,6 +537,33 @@ export function CardFormDialog ({
                 )}
               </div>
 
+              {hideScanCardForm && (
+                <div className="rounded-xl border border-zinc-700/70 bg-zinc-950/50 p-4">
+                  <p className="text-sm leading-relaxed text-zinc-400">
+                    We don&apos;t show sport, player, or set fields until the scan runs (or you enter details
+                    yourself) — that way the form doesn&apos;t assume the wrong kind of card.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScanDetailsRevealed(true)
+                      setIdentifyBanner(null)
+                    }}
+                    className="mt-3 text-sm font-medium text-slab-teal-light underline-offset-4 hover:text-slab-teal-muted hover:underline"
+                  >
+                    Enter card details manually instead
+                  </button>
+                </div>
+              )}
+
+              {hideScanCardForm && error && (
+                <p className="text-sm text-red-400" role="alert">
+                  {error}
+                </p>
+              )}
+
+              {!hideScanCardForm && (
+              <>
               <div className={ringBlock}>
                 <div>
                   <label htmlFor="sport" className="text-sm font-medium text-zinc-300">
@@ -893,54 +937,69 @@ export function CardFormDialog ({
                       : 'Save changes'}
                 </button>
               </div>
+              </>
+              )}
             </div>
 
-            <div className="bg-[var(--color-surface)]/40 p-5 lg:min-h-[320px]">
+            <div
+              className={[
+                'p-5 lg:min-h-[320px]',
+                hideScanCardForm ? 'bg-zinc-950/30' : 'bg-[var(--color-surface)]/40',
+              ].join(' ')}
+            >
               <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">
                 Preview
               </h3>
-              <div className="mt-4 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 text-sm">
-                <dl className="space-y-2 text-zinc-300">
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-zinc-500">Sport</dt>
-                    <dd className="text-right font-medium text-white">{preview.sport}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-zinc-500">Player</dt>
-                    <dd className="text-right font-medium text-white">{preview.player}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-zinc-500">Set</dt>
-                    <dd className="text-right">{preview.set}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-zinc-500">Year / #</dt>
-                    <dd className="text-right">
-                      {preview.year} · {preview.number}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-zinc-500">Variation</dt>
-                    <dd className="max-w-[60%] text-right">{preview.variation}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-zinc-500">Grading</dt>
-                    <dd className="text-right">{preview.slab}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-zinc-500">Purchase</dt>
-                    <dd className="text-right">{preview.purchase}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-zinc-500">Purchased</dt>
-                    <dd className="text-right">{preview.date}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-zinc-500">Value</dt>
-                    <dd className="text-right text-slab-teal-light">{preview.value}</dd>
-                  </div>
-                </dl>
-              </div>
+              {hideScanCardForm ? (
+                <div className="mt-4 rounded-xl border border-dashed border-zinc-700/80 bg-[var(--color-surface-raised)]/60 p-6 text-center">
+                  <p className="text-sm text-zinc-500">
+                    Card details will show here after we read your photo — or after you enter them manually.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-4 text-sm">
+                  <dl className="space-y-2 text-zinc-300">
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Sport</dt>
+                      <dd className="text-right font-medium text-white">{preview.sport}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Player</dt>
+                      <dd className="text-right font-medium text-white">{preview.player}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Set</dt>
+                      <dd className="text-right">{preview.set}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Year / #</dt>
+                      <dd className="text-right">
+                        {preview.year} · {preview.number}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Variation</dt>
+                      <dd className="max-w-[60%] text-right">{preview.variation}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Grading</dt>
+                      <dd className="text-right">{preview.slab}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Purchase</dt>
+                      <dd className="text-right">{preview.purchase}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Purchased</dt>
+                      <dd className="text-right">{preview.date}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-zinc-500">Value</dt>
+                      <dd className="text-right text-slab-teal-light">{preview.value}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
             </div>
           </form>
         </div>
