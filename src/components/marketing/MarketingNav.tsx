@@ -69,17 +69,12 @@ export function MarketingNav () {
             </Link>
           )}
           {user ? (
-            <>
-              <Link to="/dashboard/collection" className="text-[var(--slab-text-muted)] hover:text-[var(--slab-text)]">
-                Collection
-              </Link>
-              <Link
-                to="/dashboard"
-                className="rounded-lg bg-slab-teal px-4 py-2 font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
-              >
-                Dashboard
-              </Link>
-            </>
+            <Link
+              to="/dashboard/collection"
+              className="rounded-lg bg-slab-teal px-4 py-2 font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
+            >
+              Go to app
+            </Link>
           ) : (
             <>
               <Link to="/login" className="text-[var(--slab-text-muted)] hover:text-[var(--slab-text)]">
@@ -125,18 +120,13 @@ export function MarketingNav () {
                 </Link>
               )}
               {user ? (
-                <>
-                  <Link to="/dashboard/collection" className={navMutedClass} onClick={() => setMenuOpen(false)}>
-                    Collection
-                  </Link>
-                  <Link
-                    to="/dashboard"
-                    className="mt-2 inline-flex min-h-[48px] items-center justify-center rounded-xl bg-slab-teal px-4 text-base font-semibold text-zinc-950"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    Dashboard
-                  </Link>
-                </>
+                <Link
+                  to="/dashboard/collection"
+                  className="mt-1 inline-flex min-h-[48px] items-center justify-center rounded-xl bg-slab-teal px-4 text-base font-semibold text-zinc-950"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Go to app
+                </Link>
               ) : (
                 <>
                   <Link to="/login" className={navMutedClass} onClick={() => setMenuOpen(false)}>

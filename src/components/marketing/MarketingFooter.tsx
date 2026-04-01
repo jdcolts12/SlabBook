@@ -25,14 +25,9 @@ export function MarketingFooter () {
             Pricing
           </Link>
           {user ? (
-            <>
-              <Link to="/dashboard/collection" className={footerLink}>
-                Collection
-              </Link>
-              <Link to="/dashboard" className={footerLink}>
-                Dashboard
-              </Link>
-            </>
+            <Link to="/dashboard/collection" className={footerLink}>
+              Collection
+            </Link>
           ) : (
             <>
               <Link to="/login" className={footerLink}>
