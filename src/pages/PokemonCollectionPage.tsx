@@ -426,7 +426,19 @@ export function PokemonCollectionPage () {
               <tbody className="divide-y divide-[var(--color-border-subtle)]">
                 {cards.map((c) => (
                   <tr key={c.id} className="bg-[var(--color-surface-raised)]/40 hover:bg-white/[0.02]">
-                    <td className="px-4 py-3 font-medium text-white">{c.pokemon_name}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {(c.image_front_url || c.image_back_url) && (
+                          <img
+                            src={c.image_front_url?.trim() || c.image_back_url?.trim() || ''}
+                            alt={`${c.pokemon_name} photo`}
+                            className="h-10 w-10 shrink-0 rounded-md object-cover ring-1 ring-zinc-700/60"
+                            loading="lazy"
+                          />
+                        )}
+                        <span className="min-w-0 truncate font-medium text-white">{c.pokemon_name}</span>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-zinc-400">{c.language === 'jp' ? 'JP' : 'EN'}</td>
                     <td className="max-w-[200px] truncate px-4 py-3 text-zinc-400">
                       {[c.set_name, c.card_number].filter(Boolean).join(' · ') || '—'}
