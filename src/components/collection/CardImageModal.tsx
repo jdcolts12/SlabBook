@@ -87,9 +87,23 @@ export function CardImageModal ({
   const scpPlayerSlug = scpSlugify(card.player_name)
   const scpCardNumber = scpCardNumberSlug(card.card_number)
 
+  // SportsCardsPro set URLs sometimes include the year inside the set slug already,
+  // e.g. "2023 Panini Instant" => "2023-panini-instant".
+  // Example exact URL:
+  // /game/basketball-cards-2023-panini-instant/victor-wembanyama-19
+  const scpSetSlugHasYearPrefix =
+    Boolean(scpYear) && Boolean(scpSetSlug) && scpSetSlug.toLowerCase().startsWith(`${scpYear.toLowerCase()}-`)
+
+  const scpGamePathSetPart =
+    scpSportSlug && scpSetSlug
+      ? scpSetSlugHasYearPrefix
+        ? `${scpSportSlug}-${scpSetSlug}`
+        : `${scpSportSlug}-${scpYear}-${scpSetSlug}`
+      : ''
+
   const sportsCardsProGameUrl =
-    scpSportSlug && scpYear && scpSetSlug && scpPlayerSlug && scpCardNumber
-      ? `https://www.sportscardspro.com/game/${scpSportSlug}-${scpYear}-${scpSetSlug}/${scpPlayerSlug}-${scpCardNumber}`
+    scpGamePathSetPart && scpPlayerSlug && scpCardNumber
+      ? `https://www.sportscardspro.com/game/${scpGamePathSetPart}/${scpPlayerSlug}-${scpCardNumber}#completed-auctions-manual-only`
       : ''
 
   // Fallback: if we can't build the exact card URL, use a search that still leads to recent sales.
