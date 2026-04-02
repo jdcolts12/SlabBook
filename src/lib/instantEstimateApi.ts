@@ -18,13 +18,13 @@ export async function postInstantEstimateCardValue (
   accessToken: string,
   payload: InstantEstimateRequest,
 ): Promise<EstimateCardValueResponse & { error?: string }> {
-  const res = await fetch('/api/instant-estimate', {
+  const res = await fetch('/api/estimate-card-value', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, instant: true }),
   })
 
   const raw = await res.text()

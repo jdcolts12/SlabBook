@@ -972,68 +972,141 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const json = getJson(req.body)
     const cardId = typeof json.card_id === 'string' ? json.card_id : ''
     const forceRefresh = json.force_refresh === true
+    const instantMode = json.instant === true
+
+    let card: CardRow | null = null
+    let estimateInput: CardEstimateInput | null = null
 
     if (!cardId) {
-      return jsonError(res, 400, 'card_id is required.')
-    }
+      if (!instantMode) {
+        return jsonError(res, 400, 'card_id is required.')
+      }
 
-    const { data: row, error: fetchErr } = await admin
-      .from('cards')
-      .select('*')
-      .eq('id', cardId)
-      .eq('user_id', user.id)
-      .maybeSingle()
+      const player_name = typeof json.player_name === 'string' ? json.player_name.trim() : ''
+      if (!player_name) {
+        return jsonError(res, 400, 'player_name is required for instant estimate.')
+      }
 
-    if (fetchErr || !row) {
-      return jsonError(res, 404, 'Card not found.')
-    }
+      const yearStr = typeof json.year === 'string' ? json.year.trim() : ''
+      const yearNum = yearStr ? Number.parseInt(yearStr, 10) : null
 
-    const card = row as CardRow
-    const lastAt = card.last_updated ? new Date(card.last_updated).getTime() : 0
-    const freshSource =
-      card.pricing_source === 'claude_estimate' || card.pricing_source === 'demo_mode'
-    const fresh =
-      Number.isFinite(lastAt) &&
-      Date.now() - lastAt < CACHE_MS &&
-      freshSource &&
-      card.current_value != null
+      const set_name =
+        typeof json.set_name === 'string' ? (json.set_name.trim() ? json.set_name.trim() : null) : null
+      const card_number =
+        typeof json.card_number === 'string'
+          ? (json.card_number.trim() ? json.card_number.trim() : null)
+          : null
+      const variation =
+        typeof json.variation === 'string' ? (json.variation.trim() ? json.variation.trim() : null) : null
 
-    if (fresh && !forceRefresh) {
-      return jsonOk(res, 200, {
-        cached: true,
-        current_value: card.current_value,
-        value_low: (row as { value_low?: number | null }).value_low ?? null,
-        value_high: (row as { value_high?: number | null }).value_high ?? null,
-        confidence: (row as { confidence?: string | null }).confidence ?? null,
-        trend: (row as { trend?: string | null }).trend ?? null,
-        value_note: (row as { value_note?: string | null }).value_note ?? null,
-        pricing_source: card.pricing_source,
-        last_updated: card.last_updated,
-      })
-    }
+      const sport =
+        typeof json.sport === 'string' ? (json.sport.trim() ? json.sport.trim() : null) : null
 
-    const gradeDisplay =
-      card.is_graded
-        ? [card.grading_company?.trim(), card.grade?.trim()].filter(Boolean).join(' ') || null
+      const is_graded = json.is_graded === true
+      const grading_company =
+        typeof json.grading_company === 'string' ? (json.grading_company.trim() ? json.grading_company.trim() : null) : null
+
+      const gradeStr =
+        typeof json.grade === 'string' ? (json.grade.trim() ? json.grade.trim() : null) : null
+
+      const grade_display = is_graded
+        ? [grading_company ?? null, gradeStr ?? null].filter(Boolean).join(' ') || null
         : null
 
-    const estimateInput: CardEstimateInput = {
-      player_name: card.player_name,
-      year: card.year,
-      set_name: card.set_name,
-      card_number: card.card_number,
-      variation: card.variation,
-      sport: card.sport,
-      is_graded: card.is_graded,
-      grade: parseGradeNumber(card.grade),
-      grade_display: gradeDisplay,
-      grading_company: card.grading_company,
-      condition: card.condition,
+      const condition =
+        typeof json.condition === 'string' ? (json.condition.trim() ? json.condition.trim() : null) : null
+
+      estimateInput = {
+        player_name,
+        year: Number.isFinite(yearNum as number) ? yearNum : null,
+        set_name,
+        card_number,
+        variation,
+        sport,
+        is_graded,
+        grade: parseGradeNumber(gradeStr),
+        grade_display,
+        grading_company,
+        condition,
+      }
+    } else {
+      const { data: row, error: fetchErr } = await admin
+        .from('cards')
+        .select('*')
+        .eq('id', cardId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (fetchErr || !row) {
+        return jsonError(res, 404, 'Card not found.')
+      }
+
+      card = row as CardRow
+      const lastAt = card.last_updated ? new Date(card.last_updated).getTime() : 0
+      const freshSource =
+        card.pricing_source === 'claude_estimate' || card.pricing_source === 'demo_mode'
+      const fresh =
+        Number.isFinite(lastAt) &&
+        Date.now() - lastAt < CACHE_MS &&
+        freshSource &&
+        card.current_value != null
+
+      if (fresh && !forceRefresh) {
+        return jsonOk(res, 200, {
+          cached: true,
+          current_value: card.current_value,
+          value_low: (row as { value_low?: number | null }).value_low ?? null,
+          value_high: (row as { value_high?: number | null }).value_high ?? null,
+          confidence: (row as { confidence?: string | null }).confidence ?? null,
+          trend: (row as { trend?: string | null }).trend ?? null,
+          value_note: (row as { value_note?: string | null }).value_note ?? null,
+          pricing_source: card.pricing_source,
+          last_updated: card.last_updated,
+        })
+      }
+
+      const gradeDisplay =
+        card.is_graded
+          ? [card.grading_company?.trim(), card.grade?.trim()].filter(Boolean).join(' ') || null
+          : null
+
+      estimateInput = {
+        player_name: card.player_name,
+        year: card.year,
+        set_name: card.set_name,
+        card_number: card.card_number,
+        variation: card.variation,
+        sport: card.sport,
+        is_graded: card.is_graded,
+        grade: parseGradeNumber(card.grade),
+        grade_display: gradeDisplay,
+        grading_company: card.grading_company,
+        condition: card.condition,
+      }
+    }
+
+    if (!estimateInput) {
+      return jsonError(res, 500, 'Could not build estimate input.')
     }
 
     if (isDemoMode()) {
       const estimate = fakeCardEstimate(estimateInput)
       const nowIso = new Date().toISOString()
+      if (instantMode) {
+        return jsonOk(res, 200, {
+          cached: false,
+          current_value: estimate.mid,
+          value_low: estimate.low,
+          value_high: estimate.high,
+          confidence: estimate.confidence,
+          trend: estimate.trend,
+          value_note: estimate.reasoning,
+          pricing_source: 'demo_mode',
+          last_updated: nowIso,
+          data_source: estimate.data_source,
+        })
+      }
+
       const updatePayload = {
         current_value: estimate.mid,
         value_low: estimate.low,
@@ -1043,6 +1116,9 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
         value_note: estimate.reasoning,
         pricing_source: 'demo_mode',
         last_updated: nowIso,
+      }
+      if (!card) {
+        return jsonError(res, 500, 'Missing card for demo update.')
       }
       const { error: upErr } = await admin.from('cards').update(updatePayload).eq('id', card.id)
       if (upErr) {
@@ -1138,6 +1214,21 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const { estimate } = result
     const nowIso = new Date().toISOString()
 
+    if (instantMode) {
+      return jsonOk(res, 200, {
+        cached: false,
+        current_value: estimate.mid,
+        value_low: estimate.low,
+        value_high: estimate.high,
+        confidence: estimate.confidence,
+        trend: estimate.trend,
+        value_note: estimate.reasoning,
+        pricing_source: 'claude_estimate',
+        last_updated: nowIso,
+        data_source: estimate.data_source,
+      })
+    }
+
     const updatePayload = {
       current_value: estimate.mid,
       value_low: estimate.low,
@@ -1147,6 +1238,10 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       value_note: estimate.reasoning,
       pricing_source: 'claude_estimate',
       last_updated: nowIso,
+    }
+
+    if (!card) {
+      return jsonError(res, 500, 'Missing card for estimate update.')
     }
 
     const { error: upErr } = await admin.from('cards').update(updatePayload).eq('id', card.id)
