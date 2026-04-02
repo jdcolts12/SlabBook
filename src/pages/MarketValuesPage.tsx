@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { CardImageModal } from '../components/collection/CardImageModal'
+import { SportsCardCompLinks } from '../components/collection/CardCompLinks'
 import { CardThumbnail } from '../components/collection/CardThumbnail'
 import { MessageCircle, RefreshCw } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
@@ -245,6 +246,7 @@ function CardDetailsCell ({
           {formatGradeLine(c)}
           {c.card_number ? ` · #${c.card_number}` : ''}
         </p>
+        <SportsCardCompLinks card={c} className="mt-1.5" />
       </div>
     </div>
   )
@@ -696,6 +698,7 @@ export function MarketValuesPage () {
                         className={[
                           'text-zinc-200',
                           missingEst ? 'bg-amber-500/[0.04]' : '',
+                          busy ? 'bg-slab-teal/[0.06] shadow-[inset_3px_0_0_0_rgba(45,212,191,0.55)]' : '',
                           'hover:bg-white/[0.03]',
                         ].join(' ')}
                       >

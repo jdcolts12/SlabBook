@@ -6,6 +6,7 @@ import {
   type PokemonFormSubmitPayload,
 } from '../components/collection/PokemonCardFormDialog'
 import { PokemonImageModal } from '../components/collection/PokemonImageModal'
+import { PokemonCardCompLinks } from '../components/collection/CardCompLinks'
 import { PortfolioSummaryBar } from '../components/collection/PortfolioSummaryBar'
 import { Toast } from '../components/Toast'
 import { UpgradeModal } from '../components/billing/UpgradeModal'
@@ -436,7 +437,10 @@ export function PokemonCollectionPage () {
                             loading="lazy"
                           />
                         )}
-                        <span className="min-w-0 truncate font-medium text-white">{c.pokemon_name}</span>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-white">{c.pokemon_name}</div>
+                          <PokemonCardCompLinks card={c} className="mt-1" />
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-zinc-400">{c.language === 'jp' ? 'JP' : 'EN'}</td>

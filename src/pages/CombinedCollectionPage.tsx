@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CollectionSubnav } from '../components/collection/CollectionSubnav'
+import { PokemonCardCompLinks, SportsCardCompLinks } from '../components/collection/CardCompLinks'
 import { formatPokemonGradeLine } from '../lib/cardMetrics'
 import { moneyFormatter } from '../lib/formatters'
 import { supabase } from '../lib/supabase'
@@ -135,7 +136,10 @@ export function CombinedCollectionPage () {
                   return (
                     <tr key={`s-${c.id}`} className="bg-[var(--color-surface-raised)]/40">
                       <td className="px-4 py-3 text-xs font-medium text-slab-teal-muted">Sports</td>
-                      <td className="px-4 py-3 font-medium text-white">{c.player_name}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-white">{c.player_name}</div>
+                        <SportsCardCompLinks card={c} className="mt-1" />
+                      </td>
                       <td className="max-w-[220px] truncate px-4 py-3 text-zinc-400">
                         {[c.year, c.set_name].filter(Boolean).join(' · ') || '—'}
                       </td>
@@ -159,7 +163,10 @@ export function CombinedCollectionPage () {
                 return (
                   <tr key={`p-${c.id}`} className="bg-[var(--color-surface-raised)]/40">
                     <td className="px-4 py-3 text-xs font-medium text-amber-200/90">Pokémon</td>
-                    <td className="px-4 py-3 font-medium text-white">{c.pokemon_name}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-white">{c.pokemon_name}</div>
+                      <PokemonCardCompLinks card={c} className="mt-1" />
+                    </td>
                     <td className="max-w-[220px] truncate px-4 py-3 text-zinc-400">
                       {c.language === 'jp' ? 'JP' : 'EN'}
                       {c.set_name ? ` · ${c.set_name}` : ''}

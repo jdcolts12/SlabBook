@@ -3,6 +3,7 @@ import { cardGainDollars, cardGainPercent, formatGradeLine } from '../../lib/car
 import { pctFormatter } from '../../lib/formatters'
 import { CardThumbnail } from './CardThumbnail'
 import { CardValueDisplay } from './CardValueDisplay'
+import { SportsCardCompLinks } from './CardCompLinks'
 
 type Props = {
   cards: Card[]
@@ -43,10 +44,16 @@ export function CollectionGridView ({
         const setLine = [c.year != null ? String(c.year) : null, c.set_name?.trim() || null]
           .filter(Boolean)
           .join(' · ')
+        const estimating = Boolean(refreshingIds[c.id])
         return (
           <article
             key={c.id}
-            className="flex flex-col rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] transition hover:border-zinc-600/80"
+            className={[
+              'flex flex-col rounded-xl border bg-[var(--color-surface-raised)] transition',
+              estimating
+                ? 'border-slab-teal/45 shadow-[0_0_24px_-8px_rgba(45,212,191,0.35)]'
+                : 'border-[var(--color-border-subtle)] hover:border-zinc-600/80',
+            ].join(' ')}
           >
             <div className="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-t-xl">
               <CardThumbnail
@@ -77,7 +84,16 @@ export function CollectionGridView ({
                     title={c.current_value == null ? 'Get value' : 'Refresh AI estimate'}
                     aria-label={c.current_value == null ? 'Get value' : 'Refresh AI estimate'}
                   >
-                    {refreshingIds[c.id] ? '…' : c.current_value == null ? '◎' : '↻'}
+                    {estimating ? (
+                      <span
+                        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-slab-teal"
+                        aria-hidden
+                      />
+                    ) : c.current_value == null ? (
+                      '◎'
+                    ) : (
+                      '↻'
+                    )}
                   </button>
                 )}
               </div>
@@ -86,9 +102,15 @@ export function CollectionGridView ({
               </p>
               <div className="mt-3 min-w-0">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Est. value</p>
-                <div className="mt-1 text-2xl font-bold tabular-nums leading-tight text-white">
+                <div
+                  className={[
+                    'mt-1 text-2xl font-bold tabular-nums leading-tight text-white rounded-lg',
+                    estimating ? 'ring-1 ring-inset ring-slab-teal/35 bg-slab-teal/[0.06] px-2 py-1 -mx-0.5' : '',
+                  ].join(' ')}
+                >
                   <CardValueDisplay card={c} money={money} align="left" showDisclaimer={false} />
                 </div>
+                <SportsCardCompLinks card={c} className="mt-2" />
                 {showActions && c.current_value == null && (
                   <button
                     type="button"
@@ -99,10 +121,16 @@ export function CollectionGridView ({
                       }
                       void onRefresh(c)
                     }}
-                    disabled={Boolean(refreshingIds[c.id])}
-                    className="mt-2 rounded-lg border border-zinc-600/80 bg-zinc-800/40 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-zinc-700/40 disabled:opacity-50"
+                    disabled={estimating}
+                    className="mt-2 inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-600/80 bg-zinc-800/40 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-zinc-700/40 disabled:opacity-50"
                   >
-                    {refreshingIds[c.id] ? 'Searching sales…' : 'Get Value'}
+                    {estimating && (
+                      <span
+                        className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-zinc-600 border-t-slab-teal"
+                        aria-hidden
+                      />
+                    )}
+                    {estimating ? 'Searching sales…' : 'Get Value'}
                   </button>
                 )}
                 {estErr && (

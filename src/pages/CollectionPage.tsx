@@ -614,7 +614,14 @@ export function CollectionPage () {
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
       )}
       {postAdd && (
-        <div className="rounded-xl border border-slab-teal/30 bg-slab-teal/10 p-4">
+        <div
+          className={[
+            'rounded-xl border p-4 transition-colors',
+            !isFreeUser && postAdd.estimating
+              ? 'border-slab-teal/50 bg-slab-teal/[0.12] shadow-[0_0_0_1px_rgba(45,212,191,0.12)]'
+              : 'border-slab-teal/30 bg-slab-teal/10',
+          ].join(' ')}
+        >
           {isFreeUser ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -658,8 +665,14 @@ export function CollectionPage () {
                       setPostAdd((p) => (p ? { ...p, estimating: false, done: true } : p))
                     })()
                   }}
-                  className="rounded-lg bg-slab-teal px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-slab-teal px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50"
                 >
+                  {postAdd.estimating && (
+                    <span
+                      className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-zinc-900/25 border-t-zinc-950"
+                      aria-hidden
+                    />
+                  )}
                   {postAdd.estimating ? 'Searching sales...' : 'Get Estimate Now'}
                 </button>
                 <button

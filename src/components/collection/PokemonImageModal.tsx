@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PokemonCard } from '../../types/pokemonCard'
 import { formatPokemonGradeLine } from '../../lib/cardMetrics'
+import { PokemonCardCompLinks } from './CardCompLinks'
 import { moneyFormatter } from '../../lib/formatters'
 
 const money = moneyFormatter
@@ -113,6 +114,7 @@ export function PokemonImageModal ({ card, open, onClose }: Props) {
               Est. value <span className="font-semibold text-white">{money.format(Number(card.current_value))}</span>
             </p>
           )}
+          <PokemonCardCompLinks card={card} className="mt-2 justify-center text-center" />
         </div>
       </div>
     </div>

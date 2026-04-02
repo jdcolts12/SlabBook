@@ -4,6 +4,7 @@ import { formatRelativeTime } from '../../lib/relativeTime'
 import { pctFormatter } from '../../lib/formatters'
 import { CardThumbnail } from './CardThumbnail'
 import { CardValueDisplay } from './CardValueDisplay'
+import { SportsCardCompLinks } from './CardCompLinks'
 
 type Props = {
   cards: Card[]
@@ -100,8 +101,15 @@ export function CollectionTableView ({
           <tbody className="divide-y divide-[var(--color-border-subtle)]">
             {cards.map((c) => {
               const estErr = estimateErrors[c.id]
+              const estimating = Boolean(refreshingIds[c.id])
               return (
-              <tr key={c.id} className="text-zinc-200 hover:bg-white/[0.03]">
+              <tr
+                key={c.id}
+                className={[
+                  'text-zinc-200 hover:bg-white/[0.03]',
+                  estimating ? 'bg-slab-teal/[0.06] shadow-[inset_3px_0_0_0_rgba(45,212,191,0.55)]' : '',
+                ].join(' ')}
+              >
                 <td className="px-2 py-2 align-middle lg:px-3">
                   <CardThumbnail
                     card={c}
@@ -125,6 +133,7 @@ export function CollectionTableView ({
                 </td>
                 <td className="min-w-[200px] px-3 py-3 text-right lg:px-4">
                   <CardValueDisplay card={c} money={money} align="right" compactDisclaimer />
+                  <SportsCardCompLinks card={c} className="mt-1.5 justify-end" />
                   {c.current_value == null && (
                     <button
                       type="button"
@@ -135,10 +144,16 @@ export function CollectionTableView ({
                         }
                         void onRefresh(c)
                       }}
-                      disabled={Boolean(refreshingIds[c.id])}
-                      className="mt-1 rounded-md border border-zinc-600/80 bg-zinc-800/40 px-2 py-1 text-[11px] font-semibold text-zinc-300 transition hover:bg-zinc-700/40 disabled:opacity-50"
+                      disabled={estimating}
+                      className="mt-1 inline-flex items-center justify-end gap-1.5 rounded-md border border-zinc-600/80 bg-zinc-800/40 px-2 py-1 text-[11px] font-semibold text-zinc-300 transition hover:bg-zinc-700/40 disabled:opacity-50"
                     >
-                      {refreshingIds[c.id] ? 'Searching sales…' : 'Get Value'}
+                      {estimating && (
+                        <span
+                          className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-zinc-600 border-t-slab-teal"
+                          aria-hidden
+                        />
+                      )}
+                      {estimating ? 'Searching sales…' : 'Get Value'}
                     </button>
                   )}
                   {estErr && (
@@ -167,12 +182,19 @@ export function CollectionTableView ({
                         }
                         void onRefresh(c)
                       }}
-                      disabled={Boolean(refreshingIds[c.id])}
-                      className="mr-1 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
+                      disabled={estimating}
+                      className="mr-1 inline-flex items-center justify-center rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
                       title="Refresh AI estimate"
                       aria-label="Refresh AI estimate"
                     >
-                      {refreshingIds[c.id] ? '…' : '↻'}
+                      {estimating ? (
+                        <span
+                          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-slab-teal"
+                          aria-hidden
+                        />
+                      ) : (
+                        '↻'
+                      )}
                     </button>
                     <button
                       type="button"

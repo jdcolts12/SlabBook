@@ -3,6 +3,7 @@ import type { Card } from '../../types/card'
 import { cardGainDollars, cardGainPercent, formatGradeLine } from '../../lib/cardMetrics'
 import { pctFormatter } from '../../lib/formatters'
 import { CardValueDisplay } from './CardValueDisplay'
+import { SportsCardCompLinks } from './CardCompLinks'
 
 type Props = {
   card: Card | null
@@ -54,77 +55,6 @@ export function CardImageModal ({
   const hasBoth = Boolean(front && back)
   const gain = cardGainDollars(card)
   const gainPct = cardGainPercent(card)
-
-  function scpSlugify (raw: string): string {
-    return raw
-      .trim()
-      .toLowerCase()
-      .replace(/&/g, 'and')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '')
-  }
-
-  function scpCardNumberSlug (raw: string | null | undefined): string {
-    if (!raw) return ''
-    const base = String(raw).split('/')[0] || ''
-    const cleaned = base.replace(/^[#\s]+/, '').trim()
-    return scpSlugify(cleaned)
-  }
-
-  const scpSportSlug =
-    card.sport === 'NFL'
-      ? 'football-cards'
-      : card.sport === 'NBA'
-        ? 'basketball-cards'
-        : card.sport === 'MLB'
-          ? 'baseball-cards'
-          : card.sport === 'NHL'
-            ? 'hockey-cards'
-            : ''
-
-  const scpYear = card.year != null ? String(card.year) : ''
-  const scpSetSlug = card.set_name ? scpSlugify(card.set_name) : ''
-  const scpPlayerSlug = scpSlugify(card.player_name)
-  const scpCardNumber = scpCardNumberSlug(card.card_number)
-
-  // SportsCardsPro set URLs sometimes include the year inside the set slug already,
-  // e.g. "2023 Panini Instant" => "2023-panini-instant".
-  // Example exact URL:
-  // /game/basketball-cards-2023-panini-instant/victor-wembanyama-19
-  const scpSetSlugHasYearPrefix =
-    Boolean(scpYear) && Boolean(scpSetSlug) && scpSetSlug.toLowerCase().startsWith(`${scpYear.toLowerCase()}-`)
-
-  const scpGamePathSetPart =
-    scpSportSlug && scpSetSlug
-      ? scpSetSlugHasYearPrefix
-        ? `${scpSportSlug}-${scpSetSlug}`
-        : `${scpSportSlug}-${scpYear}-${scpSetSlug}`
-      : ''
-
-  const sportsCardsProGameUrl =
-    scpGamePathSetPart && scpPlayerSlug && scpCardNumber
-      ? `https://www.sportscardspro.com/game/${scpGamePathSetPart}/${scpPlayerSlug}-${scpCardNumber}#completed-auctions-manual-only`
-      : ''
-
-  // Fallback: if we can't build the exact card URL, use a search that still leads to recent sales.
-  const sportsCardsProQuery = [
-    card.player_name,
-    card.year != null ? String(card.year) : null,
-    card.set_name,
-    card.card_number,
-    card.variation,
-    card.sport,
-  ]
-    .filter((x): x is string => Boolean(x && x.trim()))
-    .join(' ')
-    .trim()
-
-  const sportsCardsProSearchUrl =
-    sportsCardsProQuery.length > 0
-      ? `https://www.sportscardspro.com/search-products?q=${encodeURIComponent(sportsCardsProQuery)}&type=prices`
-      : ''
-
-  const sportsCardsProUrl = sportsCardsProGameUrl || sportsCardsProSearchUrl
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-8">
@@ -204,9 +134,17 @@ export function CardImageModal ({
               <p className="mt-1 text-xs text-zinc-400">{formatGradeLine(card)}</p>
               {card.card_number && <p className="mt-1 text-xs text-zinc-500">Card #: {card.card_number}</p>}
               {card.variation && <p className="mt-1 text-xs text-zinc-500">Variation: {card.variation}</p>}
+              <SportsCardCompLinks card={card} className="mt-3 border-t border-[var(--color-border-subtle)] pt-3" />
             </div>
 
-            <div className="mt-4 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-3">
+            <div
+              className={[
+                'mt-4 rounded-lg border bg-[var(--color-surface-raised)] p-3 transition-colors',
+                refreshing
+                  ? 'border-slab-teal/40 shadow-[0_0_0_1px_rgba(45,212,191,0.12)]'
+                  : 'border-[var(--color-border-subtle)]',
+              ].join(' ')}
+            >
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Current value estimate</p>
               {isFreeUser && card.current_value == null ? (
                 <div className="mt-2">
@@ -229,8 +167,14 @@ export function CardImageModal ({
                     type="button"
                     onClick={() => onRefreshValue?.(card)}
                     disabled={refreshing}
-                    className="mt-2 rounded-lg border border-slab-teal/30 bg-slab-teal/10 px-3 py-2 text-xs font-semibold text-slab-teal-light hover:bg-slab-teal/20 disabled:opacity-50"
+                    className="mt-2 inline-flex items-center justify-center gap-2 rounded-lg border border-slab-teal/30 bg-slab-teal/10 px-3 py-2 text-xs font-semibold text-slab-teal-light hover:bg-slab-teal/20 disabled:opacity-50"
                   >
+                    {refreshing && (
+                      <span
+                        className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-slab-teal/30 border-t-slab-teal-light"
+                        aria-hidden
+                      />
+                    )}
                     {refreshing ? 'Searching sales…' : (card.current_value == null ? 'Get Value' : 'Refresh Value')}
                   </button>
                 </>
@@ -246,25 +190,6 @@ export function CardImageModal ({
                 </p>
               ) : (
                 <p className="mt-1 text-zinc-500">No purchase price yet.</p>
-              )}
-              <a
-                href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${card.player_name} ${card.year ?? ''} ${card.set_name ?? ''} ${card.card_number ?? ''}`)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-block text-xs font-medium text-slab-teal hover:text-slab-teal-light"
-              >
-                View recent comps
-              </a>
-
-              {sportsCardsProUrl && (
-                <a
-                  href={sportsCardsProUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="ml-4 mt-3 inline-block text-xs font-medium text-slab-teal hover:text-slab-teal-light"
-                >
-                  SportsCardsPro card
-                </a>
               )}
             </div>
           </div>

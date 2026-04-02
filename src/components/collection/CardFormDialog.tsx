@@ -1255,10 +1255,23 @@ export function CardFormDialog ({
                           </button>
                         </div>
                       ) : (
-                        <div>
+                        <div
+                          className={[
+                            'rounded-lg border p-3 -m-3 transition-colors',
+                            instantEstimating
+                              ? 'border-slab-teal/45 bg-slab-teal/[0.07] shadow-[0_0_0_1px_rgba(45,212,191,0.1)]'
+                              : 'border-transparent',
+                          ].join(' ')}
+                        >
                           <p className="text-sm font-semibold text-white">💰 Estimated Market Value</p>
                           {instantEstimating && (
-                            <p className="mt-2 text-xs text-zinc-400">Searching recent sales…</p>
+                            <p className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
+                              <span
+                                className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-slab-teal/30 border-t-slab-teal-light"
+                                aria-hidden
+                              />
+                              Searching recent sales…
+                            </p>
                           )}
                           {instantEstimate && (
                             <>
