@@ -628,8 +628,8 @@ export function CardFormDialog ({
                         {identifying
                           ? 'Scanning card…'
                           : saving
-                            ? 'Saving & estimating…'
-                            : 'Scan, add & get estimate'}
+                            ? 'Saving & pricing…'
+                            : 'Scan & price'}
                       </button>
                       <button
                         type="button"
@@ -637,7 +637,7 @@ export function CardFormDialog ({
                         disabled={!canIdentify || saving || identifying}
                         className="rounded-lg border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/5 disabled:opacity-50"
                       >
-                        {identifying ? 'Scanning…' : 'Identify only — review first'}
+                        {identifying ? 'Scanning…' : 'Identify only — verify'}
                       </button>
                     </>
                   ) : (
@@ -661,8 +661,7 @@ export function CardFormDialog ({
               {hideScanCardForm && (
                 <div className="rounded-xl border border-zinc-700/70 bg-zinc-950/50 p-4">
                   <p className="text-sm leading-relaxed text-zinc-400">
-                    We don&apos;t show sport, player, or set fields until the scan runs (or you enter details
-                    yourself) — that way the form doesn&apos;t assume the wrong kind of card.
+                    Add a clear front photo first. Then scan to detect the card and load the estimate.
                   </p>
                   <button
                     type="button"
