@@ -423,7 +423,7 @@ export function LandingPage () {
                     to="/dashboard/collection"
                     className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-slab-teal px-6 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light sm:w-auto sm:min-w-[11rem] sm:px-8"
                   >
-                    Go to app
+                    My dashboard
                   </Link>
                   <Link
                     to="/dashboard/collection?scan=1"

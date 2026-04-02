@@ -73,7 +73,7 @@ export function MarketingNav () {
               to="/dashboard/collection"
               className="rounded-lg bg-slab-teal px-4 py-2 font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
             >
-              Go to app
+              My dashboard
             </Link>
           ) : (
             <>
@@ -125,7 +125,7 @@ export function MarketingNav () {
                   className="mt-1 inline-flex min-h-[48px] items-center justify-center rounded-xl bg-slab-teal px-4 text-base font-semibold text-zinc-950"
                   onClick={() => setMenuOpen(false)}
                 >
-                  Go to app
+                  My dashboard
                 </Link>
               ) : (
                 <>
