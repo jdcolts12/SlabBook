@@ -76,11 +76,11 @@ function formValuesToPayload (userId: string, v: CardFormValues): CardWritable {
     purchase_price: parseOptionalNumber(v.purchase_price),
     purchase_date: v.purchase_date.trim() || null,
     current_value: parseOptionalNumber(v.current_value),
-    value_low: null,
-    value_high: null,
-    confidence: null,
-    trend: null,
-    value_note: null,
+    value_low: v.instant_value_low ? parseOptionalNumber(v.instant_value_low) : null,
+    value_high: v.instant_value_high ? parseOptionalNumber(v.instant_value_high) : null,
+    confidence: v.instant_confidence ?? null,
+    trend: v.instant_trend ?? null,
+    value_note: v.instant_value_note ? v.instant_value_note.trim() || null : null,
     pricing_source: null,
   }
 }

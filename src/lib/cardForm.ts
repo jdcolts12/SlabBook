@@ -18,6 +18,16 @@ export type CardFormValues = {
   purchase_price: string
   purchase_date: string
   current_value: string
+
+  /**
+   * Optional instant estimate outputs (used for pre-save estimate).
+   * Only set for scan/pro flows; not manually editable today.
+   */
+  instant_value_low?: string
+  instant_value_high?: string
+  instant_confidence?: string
+  instant_trend?: string
+  instant_value_note?: string
 }
 
 export function variationFromFormValues (f: CardFormValues): string | null {

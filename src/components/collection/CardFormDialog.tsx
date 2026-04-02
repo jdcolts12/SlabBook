@@ -356,7 +356,15 @@ export function CardFormDialog ({
       setInstantEstimate(est)
       setLastInstantEstimateSignature(signature)
       if (est.current_value != null) {
-        setForm((prev) => ({ ...prev, current_value: String(est.current_value) }))
+        setForm((prev) => ({
+          ...prev,
+          current_value: String(est.current_value),
+          instant_value_low: est.value_low != null ? String(est.value_low) : undefined,
+          instant_value_high: est.value_high != null ? String(est.value_high) : undefined,
+          instant_confidence: est.confidence ?? undefined,
+          instant_trend: est.trend ?? undefined,
+          instant_value_note: est.value_note ?? undefined,
+        }))
       }
       return est
     } catch (err) {
@@ -482,6 +490,11 @@ export function CardFormDialog ({
       if (!isFreeUser) {
         const est = await requestInstantEstimate(merged)
         if (est?.current_value != null) {
+          merged.instant_value_low = est.value_low != null ? String(est.value_low) : undefined
+          merged.instant_value_high = est.value_high != null ? String(est.value_high) : undefined
+          merged.instant_confidence = est.confidence ?? undefined
+          merged.instant_trend = est.trend ?? undefined
+          merged.instant_value_note = est.value_note ?? undefined
           merged.current_value = String(est.current_value)
         }
       }
