@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { WatchlistItemCompLinks } from '../components/collection/CardCompLinks'
 import { CollectionSubnav } from '../components/collection/CollectionSubnav'
+import { removeCardImageByPublicUrl } from '../lib/cardImageStorage'
 import { moneyFormatter } from '../lib/formatters'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -47,14 +49,17 @@ export function WatchlistPage () {
     void load()
   }, [load])
 
-  async function removeItem (id: string) {
+  async function removeItem (row: WatchlistItem) {
     if (!user) return
-    setDeletingId(id)
+    setDeletingId(row.id)
     setError(null)
     try {
-      const { error: delErr } = await supabase.from('watchlist_items').delete().eq('id', id)
+      if (row.image_front_url?.trim()) {
+        await removeCardImageByPublicUrl(supabase, row.image_front_url)
+      }
+      const { error: delErr } = await supabase.from('watchlist_items').delete().eq('id', row.id)
       if (delErr) throw new Error(delErr.message)
-      setItems((prev) => prev.filter((x) => x.id !== id))
+      setItems((prev) => prev.filter((x) => x.id !== row.id))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not remove item.')
     } finally {
@@ -97,41 +102,65 @@ export function WatchlistPage () {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[var(--color-border-subtle)]">
-          <table className="w-full min-w-[640px] text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="border-b border-[var(--color-border-subtle)] bg-[var(--color-surface)]/80 text-xs uppercase tracking-wide text-zinc-500">
               <tr>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Set / #</th>
-                <th className="px-4 py-3 font-medium">Est.</th>
-                <th className="px-4 py-3 font-medium text-right">Actions</th>
+                <th className="w-12 px-2 py-2 font-medium" aria-label="Thumbnail" />
+                <th className="px-3 py-2 font-medium">Card</th>
+                <th className="px-3 py-2 font-medium">Type</th>
+                <th className="px-3 py-2 font-medium">Set / #</th>
+                <th className="px-3 py-2 font-medium">Est.</th>
+                <th className="px-3 py-2 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border-subtle)]">
-              {items.map((row) => (
-                <tr key={row.id} className="bg-[var(--color-surface-raised)]/40">
-                  <td className="px-4 py-3 text-zinc-400">{rowLabel(row)}</td>
-                  <td className="px-4 py-3 font-medium text-white">{row.player_name}</td>
-                  <td className="px-4 py-3 text-zinc-300">
-                    {[row.set_name, row.card_number].filter(Boolean).join(' · ') || '—'}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-zinc-200">
-                    {row.current_value != null
-                      ? money.format(Number(row.current_value))
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => void removeItem(row.id)}
-                      disabled={deletingId === row.id}
-                      className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-                    >
-                      {deletingId === row.id ? 'Removing…' : 'Remove'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {items.map((row) => {
+                const thumb = row.image_front_url?.trim()
+                return (
+                  <tr key={row.id} className="bg-[var(--color-surface-raised)]/40">
+                    <td className="w-12 px-2 py-2 align-middle">
+                      <div
+                        className="mx-auto flex h-11 w-8 shrink-0 overflow-hidden rounded border border-zinc-700/80 bg-zinc-900/80"
+                        title={thumb ? 'Scan photo' : 'No photo saved'}
+                      >
+                        {thumb ? (
+                          <img
+                            src={thumb}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="m-auto text-[9px] leading-none text-zinc-600">—</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <p className="font-medium text-white">{row.player_name}</p>
+                      <WatchlistItemCompLinks item={row} className="mt-1" />
+                    </td>
+                    <td className="px-3 py-2 align-top text-zinc-400">{rowLabel(row)}</td>
+                    <td className="px-3 py-2 align-top text-zinc-300">
+                      {[row.set_name, row.card_number].filter(Boolean).join(' · ') || '—'}
+                    </td>
+                    <td className="px-3 py-2 align-top tabular-nums text-zinc-200">
+                      {row.current_value != null
+                        ? money.format(Number(row.current_value))
+                        : '—'}
+                    </td>
+                    <td className="px-3 py-2 align-top text-right">
+                      <button
+                        type="button"
+                        onClick={() => void removeItem(row)}
+                        disabled={deletingId === row.id}
+                        className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+                      >
+                        {deletingId === row.id ? 'Removing…' : 'Remove'}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

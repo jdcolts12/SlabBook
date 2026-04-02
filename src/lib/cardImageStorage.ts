@@ -41,6 +41,23 @@ export function pokemonCardImageObjectPath (
   return `${userId}/pokemon-${cardId}-${side}.${ext}`
 }
 
+export function watchlistImageObjectPath (userId: string, watchlistItemId: string, ext: string): string {
+  return `${userId}/watchlist-${watchlistItemId}-front.${ext}`
+}
+
+export async function uploadWatchlistImageFront (
+  supabase: SupabaseClient,
+  userId: string,
+  watchlistItemId: string,
+  file: File,
+): Promise<string> {
+  const err = validateCardImageFile(file)
+  if (err) throw new Error(err)
+  const ext = extForMime(file.type)
+  const path = watchlistImageObjectPath(userId, watchlistItemId, ext)
+  return uploadToCardImagesBucket(supabase, path, file)
+}
+
 export function parseCardImagePathFromPublicUrl (url: string): string | null {
   const marker = `/object/public/${CARD_IMAGES_BUCKET}/`
   const i = url.indexOf(marker)

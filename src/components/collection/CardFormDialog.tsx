@@ -13,6 +13,7 @@ import {
   identifyCardFromImage,
   type DetectedCardKind,
 } from '../../lib/identifyCardApi'
+import { uploadWatchlistImageFront } from '../../lib/cardImageStorage'
 import { supabase } from '../../lib/supabase'
 import type { EstimateCardValueResponse } from '../../lib/estimateCardValueApi'
 import { postInstantEstimateCardValue } from '../../lib/instantEstimateApi'
@@ -558,8 +559,22 @@ export function CardFormDialog ({
     setWatchlistSaving(true)
     setWatchlistError(null)
     try {
+      const watchlistId = crypto.randomUUID()
       const row = formValuesToWatchlistInsert(user.id, pendingSubmit.values)
-      const { error: insErr } = await supabase.from('watchlist_items').insert(row)
+      let image_front_url: string | null = null
+      if (pendingSubmit.imageFront) {
+        image_front_url = await uploadWatchlistImageFront(
+          supabase,
+          user.id,
+          watchlistId,
+          pendingSubmit.imageFront,
+        )
+      }
+      const { error: insErr } = await supabase.from('watchlist_items').insert({
+        ...row,
+        id: watchlistId,
+        image_front_url,
+      })
       if (insErr) throw new Error(insErr.message)
       onWatchlistSaved?.()
       dismissAddConfirm()

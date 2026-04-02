@@ -127,6 +127,7 @@ create table if not exists public.watchlist_items (
   confidence text,
   trend text,
   value_note text,
+  image_front_url text,
   created_at timestamptz not null default now ()
 );
 

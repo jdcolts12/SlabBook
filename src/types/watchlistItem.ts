@@ -19,5 +19,7 @@ export type WatchlistItem = {
   confidence: string | null
   trend: string | null
   value_note: string | null
+  /** Present after migration + save from scan with a front photo. */
+  image_front_url?: string | null
   created_at: string
 }

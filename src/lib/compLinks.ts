@@ -1,5 +1,12 @@
 import type { Card } from '../types/card'
 import type { PokemonCard } from '../types/pokemonCard'
+import type { WatchlistItem } from '../types/watchlistItem'
+
+/** Fields used to build sports / generic trading-card comp URLs. */
+export type CardCompsFields = Pick<
+  Card,
+  'player_name' | 'year' | 'set_name' | 'card_number' | 'variation' | 'sport'
+>
 
 function scpSlugify (raw: string): string {
   return raw
@@ -33,8 +40,19 @@ export function ebayCompsUrlForCard (
   return `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}`
 }
 
+export function watchlistItemToCardComps (w: WatchlistItem): CardCompsFields {
+  return {
+    player_name: w.player_name,
+    year: w.year,
+    set_name: w.set_name,
+    card_number: w.card_number,
+    variation: w.variation,
+    sport: w.sport,
+  }
+}
+
 /** SportsCardsPro exact game URL when we have sport/year/set/player/#; else search. */
-export function sportsCardsProCompsUrlForCard (card: Card): string {
+export function sportsCardsProCompsUrlForCard (card: CardCompsFields): string {
   const scpSportSlug = sportSlug(card.sport)
   const scpYear = card.year != null ? String(card.year) : ''
   const scpSetSlug = card.set_name ? scpSlugify(card.set_name) : ''
