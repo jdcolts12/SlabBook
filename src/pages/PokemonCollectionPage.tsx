@@ -53,7 +53,7 @@ export function PokemonCollectionPage () {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, session } = useAuth()
-  const { profile } = useUserProfile(user?.id)
+  const { refresh: refreshProfile } = useUserProfile(user?.id)
   const [cards, setCards] = useState<PokemonCard[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -172,7 +172,8 @@ export function PokemonCollectionPage () {
 
   async function openAdd () {
     if (!user) return
-    const cap = maxCardsForUser(profile)
+    const plan = await refreshProfile({ quiet: true })
+    const cap = maxCardsForUser(plan)
     if (!Number.isFinite(cap)) {
       setDialogMode('add')
       setEditing(null)
@@ -213,7 +214,8 @@ export function PokemonCollectionPage () {
     const payload = formToPayload(user.id, values)
 
     if (dialogMode === 'add') {
-      const cap = maxCardsForUser(profile)
+      const plan = await refreshProfile({ quiet: true })
+      const cap = maxCardsForUser(plan)
       if (Number.isFinite(cap)) {
         const total = await fetchTotalCardCount(supabase, user.id)
         if (total >= cap) {

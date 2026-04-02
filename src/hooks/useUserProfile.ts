@@ -6,13 +6,13 @@ export function useUserProfile (userId: string | undefined) {
   const [profile, setProfile] = useState<UserPlanFields | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { quiet?: boolean }): Promise<UserPlanFields | null> => {
     if (!userId) {
       setProfile(null)
-      setLoading(false)
-      return
+      if (!opts?.quiet) setLoading(false)
+      return null
     }
-    setLoading(true)
+    if (!opts?.quiet) setLoading(true)
     const { data, error } = await supabase
       .from('users')
       .select(
@@ -20,12 +20,15 @@ export function useUserProfile (userId: string | undefined) {
       )
       .eq('id', userId)
       .maybeSingle()
+    let row: UserPlanFields | null = null
     if (error) {
       setProfile(null)
     } else {
-      setProfile(data as UserPlanFields)
+      row = (data ?? null) as UserPlanFields | null
+      setProfile(row)
     }
-    setLoading(false)
+    if (!opts?.quiet) setLoading(false)
+    return row
   }, [userId])
 
   useEffect(() => {
@@ -40,7 +43,7 @@ export function useUserProfile (userId: string | undefined) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${userId}` },
         () => {
-          void load()
+          void load({ quiet: true })
         },
       )
       .subscribe()

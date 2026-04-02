@@ -162,7 +162,12 @@ function fakeCardEstimate (card: CardEstimateInput): CardEstimateResult {
   }
 }
 
-const SYSTEM_PROMPT = `Sports card analyst (NFL/NBA/MLB). Use web search for eBay sold/listing comps when available. Ground USD low/mid/high in findings; wider range + lower confidence if comps thin. Do not invent exact sold prices.`
+const SYSTEM_PROMPT = `Card analyst for US sports OR Pokémon cards.
+
+If \`sport\` is null/empty, treat the card as Pokémon (use Pokémon card context when forming eBay sold queries).
+If \`sport\` is one of NFL/NBA/MLB/NHL, treat it as a US sports card.
+
+Use web search for eBay sold/listing comps when available. Ground USD low/mid/high in findings; wider range + lower confidence if comps thin. Do not invent exact sold prices.`
 
 /** Anthropic server tool — executed by Anthropic (see web search tool docs) */
 function getWebSearchTool (): Record<string, unknown> {
@@ -232,8 +237,10 @@ function buildUserPrompt (card: CardEstimateInput): string {
         : 'Graded (details incomplete)')
     : 'N/A (raw)'
 
+  const cardTypeLine = card.sport ? 'US Sports card' : 'Pokémon card'
   return `Estimate market USD value:
 Player ${card.player_name} | Yr ${card.year ?? '?'} | Set ${card.set_name ?? '?'} | #${card.card_number ?? '—'} | Var ${card.variation ?? '—'} | Sport ${card.sport ?? '?'}
+Card type: ${cardTypeLine}
 Graded ${card.is_graded} | Slab ${gradeLine} | Raw cond ${card.condition ?? '—'}
 If web_search: 1–3 tight eBay sold queries max, then submit_card_estimate once. No comps → wider range, low confidence.`
 }

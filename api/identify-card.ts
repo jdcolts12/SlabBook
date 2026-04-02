@@ -146,28 +146,37 @@ type AnthropicMessageResponse = {
   error?: { message?: string }
 }
 
-const IDENTIFY_PROMPT = `You identify trading cards from photos: US sports (NFL, NBA, MLB, NHL), Pokémon TCG, and other TCG.
+const IDENTIFY_PROMPT = `Before anything else, determine card category from the photo:
 
-First decide card_type:
-- "sports" — athlete on a licensed US sports card (football, basketball, baseball, hockey).
-- "pokemon_tcg" — Pokémon (Pokémon Company), Pikachu, Charizard, Japanese Pokémon frames, Poké Ball motifs, etc.
-- "other_tcg" — Magic, Yu-Gi-Oh, Lorcana, etc. (not Pokémon, not US sports).
+A) SPORTS card ("sports"): real human athlete photo, team logo/jersey/stadium, Panini/Topps/Upper Deck/Bowman branding, PSA/BGS slab with player name, position listed, statistics on the back.
+B) POKEMON card ("pokemon_tcg"): Pokémon creature illustration (not a human), Pokémon logo, HP number, attack moves with damage numbers, weakness/resistance/retreat section, set symbol, card number like "4/102" or "025/198", energy icons, Basic/Stage 1/Stage 2/EX/GX/V markers.
+C) Other TCG ("other_tcg"): Magic, Yu-Gi-Oh, Lorcana, etc. (NOT Pokémon, NOT US sports).
 
-When analyzing the image:
-1. For sports: the subject is the PLAYER NAME. For Pokémon/TCG: the subject is the CHARACTER or card name on the card (put it in player_name for JSON compatibility).
-2. YEAR if visible on front, back, or slab label.
-3. SET: design, logos, expansion name, or slab label text.
-4. CARD NUMBER if visible.
-5. VARIATION: holo, full art, alt art, numbered /xx, rookie, parallel color, etc.
-6. Graded slabs (PSA, BGS, CGC, SGC, etc.): read company, grade, cert/year/set from label when visible.
+STEP 1: Output only one field first by setting:
+- "card_type" to exactly "sports" | "pokemon_tcg" | "other_tcg".
+
+STEP 2: Only after card_type is set, extract the rest:
+- YEAR: if visible on front/back/slab.
+- SET: expansion/set name text or logos.
+- CARD NUMBER: if visible (e.g. 4/102, 025/198, #161, etc).
+- VARIATION: holo/full art/alt art/numbered/rookie/parallel language.
+- Graded slabs: read grading_company + grade when present.
+
+SPORTS extraction:
+- player_name = the athlete/player name on the card.
+- sport = one of NFL, NBA, MLB, NHL (infer from logos/uniforms/team).
+
+POKEMON/OTHER extraction:
+- Put the Pokémon character / card name into "player_name" (so your JSON stays compatible with the app).
+- sport = "" (empty string) — never NFL/NBA/MLB/NHL on non-sports cards.
 
 Output requirements:
 - Return ONLY valid JSON (no markdown, no explanation).
-- If uncertain, best estimate and lower confidence.
+- If uncertain, provide best estimates and set confidence to lower value.
 - Do not invent invisible details. Unknown strings: "". grading_company/grade: null when unknown.
 - card_type is required: exactly "sports" | "pokemon_tcg" | "other_tcg".
-- When card_type is "sports", sport must be one of NFL, NBA, MLB, NHL (infer from logos/uniforms/set if needed).
-- When card_type is "pokemon_tcg" or "other_tcg", set sport to "" (empty string) — never put NFL/NBA/MLB/NHL on non-sports cards.
+- When card_type is "sports", sport must be one of NFL, NBA, MLB, NHL.
+- When card_type is "pokemon_tcg" or "other_tcg", set sport to "".
 
 Return ONLY this JSON object:
 {

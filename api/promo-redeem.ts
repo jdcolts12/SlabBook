@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
+import { buildUserUpdateFromPromo, type PromoCodeRow } from '../server/promo'
 
 function safeJson500 (res: VercelResponse, message: string) {
   const r = res as VercelResponse & { headersSent?: boolean; writableEnded?: boolean }
@@ -71,9 +72,10 @@ export default async function handler (req: VercelRequest, res: VercelResponse) 
 
     await admin.from('promo_codes').update({ uses_count: promo.uses_count + 1 }).eq('id', promo.id)
 
-    const userUpdate: Record<string, unknown> = { promo_code_used: promo.code }
+    const userUpdate: Record<string, unknown> = {
+      ...buildUserUpdateFromPromo(promo as PromoCodeRow),
+    }
     if (promo.type === 'lifetime_free') {
-      userUpdate.subscription_tier = 'lifetime'
       userUpdate.subscription_status = 'active'
       userUpdate.lifetime_access = true
       userUpdate.subscription_id = null

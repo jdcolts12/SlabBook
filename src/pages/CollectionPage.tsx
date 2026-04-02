@@ -25,6 +25,7 @@ import { useUserProfile } from '../hooks/useUserProfile'
 import {
   removeCardImageByPublicUrl,
   uploadCardImageSide,
+  uploadPokemonCardImageSide,
 } from '../lib/cardImageStorage'
 import { supabase } from '../lib/supabase'
 import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
@@ -34,6 +35,7 @@ import { getCardValue } from '../lib/pricing-service'
 import { createCheckoutSession } from '../lib/stripeApi'
 import { effectiveTier, maxCardsForUser } from '../lib/tierLimits'
 import type { Card } from '../types/card'
+import type { PokemonCard } from '../types/pokemonCard'
 
 const money = moneyFormatter
 
@@ -83,6 +85,29 @@ function formValuesToPayload (userId: string, v: CardFormValues): CardWritable {
   }
 }
 
+type PokemonWritable = Omit<
+  PokemonCard,
+  'id' | 'created_at' | 'image_front_url' | 'image_back_url'
+>
+
+function pokemonValuesToPayload (userId: string, v: CardFormValues): PokemonWritable {
+  return {
+    user_id: userId,
+    pokemon_name: v.player_name.trim(),
+    language: 'en',
+    set_name: v.set_name.trim() || null,
+    card_number: v.card_number.trim() || null,
+    variation: variationFromFormValues(v),
+    is_graded: v.is_graded,
+    grade: v.is_graded && v.grade.trim() ? v.grade.trim() : null,
+    grading_company: v.is_graded && v.grading_company.trim() ? v.grading_company.trim() : null,
+    condition: v.is_graded ? null : v.condition.trim() || null,
+    purchase_price: parseOptionalNumber(v.purchase_price),
+    purchase_date: v.purchase_date.trim() || null,
+    current_value: parseOptionalNumber(v.current_value),
+  }
+}
+
 const VIEW_KEY = 'slabbook.collectionView'
 
 function readStoredView (): ViewMode {
@@ -117,7 +142,7 @@ export function CollectionPage () {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user, session } = useAuth()
-  const { profile } = useUserProfile(user?.id)
+  const { profile, refresh: refreshProfile } = useUserProfile(user?.id)
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -265,7 +290,8 @@ export function CollectionPage () {
   function openAdd (opts?: { scan?: boolean }) {
     void (async () => {
       if (!user) return
-      const cap = maxCardsForUser(profile)
+      const plan = await refreshProfile({ quiet: true })
+      const cap = maxCardsForUser(plan)
       if (!Number.isFinite(cap)) {
         setDialogMode('add')
         setEditing(null)
@@ -323,10 +349,13 @@ export function CollectionPage () {
       removeImageBack,
       awaitEstimateAfterSave,
     } = submit
-    const payload = formValuesToPayload(user.id, values)
+    const cardKind = values.detected_card_kind
+    const cardPayload = formValuesToPayload(user.id, values)
+    const pokemonPayload = pokemonValuesToPayload(user.id, values)
 
     if (dialogMode === 'add') {
-      const cap = maxCardsForUser(profile)
+      const plan = await refreshProfile({ quiet: true })
+      const cap = maxCardsForUser(plan)
       if (Number.isFinite(cap)) {
         const total = await fetchTotalCardCount(supabase, user.id)
         if (total >= cap) {
@@ -334,9 +363,61 @@ export function CollectionPage () {
           throw new Error('Collection limit reached. Upgrade to add more cards.')
         }
       }
+      if (cardKind === 'pokemon_tcg') {
+        const { error: insertErr } = await supabase.from('pokemon_cards').insert({
+          id: draftCardId,
+          ...pokemonPayload,
+          image_front_url: null,
+          image_back_url: null,
+        })
+        if (insertErr) throw new Error(insertErr.message)
+
+        let image_front_url: string | null = null
+        let image_back_url: string | null = null
+        try {
+          if (imageFront) {
+            image_front_url = await uploadPokemonCardImageSide(
+              supabase,
+              user.id,
+              draftCardId,
+              'front',
+              imageFront,
+            )
+          }
+          if (imageBack) {
+            image_back_url = await uploadPokemonCardImageSide(
+              supabase,
+              user.id,
+              draftCardId,
+              'back',
+              imageBack,
+            )
+          }
+          if (image_front_url || image_back_url) {
+            const { error: imgErr } = await supabase
+              .from('pokemon_cards')
+              .update({
+                ...(image_front_url != null ? { image_front_url } : {}),
+                ...(image_back_url != null ? { image_back_url } : {}),
+              })
+              .eq('id', draftCardId)
+              .eq('user_id', user.id)
+            if (imgErr) throw new Error(imgErr.message)
+          }
+        } catch (imgErr) {
+          await supabase.from('pokemon_cards').delete().eq('id', draftCardId).eq('user_id', user.id)
+          throw imgErr instanceof Error ? imgErr : new Error('Image upload failed.')
+        }
+
+        setToastMessage('Pokémon card added to your collection.')
+        await loadCards({ silent: true })
+        navigate('/dashboard/collection/pokemon')
+        return
+      }
+
       const { error: insertErr } = await supabase.from('cards').insert({
         id: draftCardId,
-        ...payload,
+        ...cardPayload,
         image_front_url: null,
         image_back_url: null,
         last_updated: new Date().toISOString(),
@@ -388,6 +469,14 @@ export function CollectionPage () {
         .single()
       if (fetchErr) throw new Error(fetchErr.message)
       const added = fullRow as Card
+
+      // If the scan verification already produced an instant estimate, don't re-estimate after saving.
+      if (!isFreeUser && added.current_value != null) {
+        setToastMessage('Card added — instant value estimate ready.')
+        await loadCards({ silent: true })
+        setPostAdd(null)
+        return
+      }
 
       const waitForEstimate = awaitEstimateAfterSave === true
 
@@ -441,7 +530,7 @@ export function CollectionPage () {
       }
 
       const updates: Record<string, unknown> = {
-        ...payload,
+        ...cardPayload,
         last_updated: new Date().toISOString(),
       }
       if (removeImageFront || imageFront) updates.image_front_url = nextFront
@@ -767,6 +856,8 @@ export function CollectionPage () {
           setScanModeOpen(false)
         }}
         onSubmit={handleSubmit}
+        isFreeUser={isFreeUser}
+        onUpgradeRequest={() => setUpgradeOpen(true)}
       />
 
       <CardImageModal

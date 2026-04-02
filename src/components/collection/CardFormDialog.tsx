@@ -14,6 +14,8 @@ import {
   type DetectedCardKind,
 } from '../../lib/identifyCardApi'
 import { supabase } from '../../lib/supabase'
+import type { EstimateCardValueResponse } from '../../lib/estimateCardValueApi'
+import { postInstantEstimateCardValue } from '../../lib/instantEstimateApi'
 import { CardPhotoDropzone } from './CardPhotoDropzone'
 
 export type CardFormSubmitPayload = {
@@ -34,6 +36,8 @@ type CardFormDialogProps = {
   scanMode?: boolean
   onClose: () => void
   onSubmit: (payload: CardFormSubmitPayload) => Promise<void>
+  isFreeUser?: boolean
+  onUpgradeRequest?: () => void
 }
 
 const VARIATION_PRESETS = [
@@ -161,6 +165,8 @@ export function CardFormDialog ({
   scanMode = false,
   onClose,
   onSubmit,
+  isFreeUser = false,
+  onUpgradeRequest,
 }: CardFormDialogProps) {
   const [form, setForm] = useState<CardFormValues>(emptyForm)
   const [error, setError] = useState<string | null>(null)
@@ -178,6 +184,10 @@ export function CardFormDialog ({
   /** In scan add mode, hide sport/player/etc. until AI identifies or user chooses manual entry. */
   const [scanDetailsRevealed, setScanDetailsRevealed] = useState(false)
   const [verifyLowConfidence, setVerifyLowConfidence] = useState(false)
+  const [instantEstimate, setInstantEstimate] = useState<EstimateCardValueResponse | null>(null)
+  const [instantEstimating, setInstantEstimating] = useState(false)
+  const [instantEstimateError, setInstantEstimateError] = useState<string | null>(null)
+  const [lastInstantEstimateSignature, setLastInstantEstimateSignature] = useState<string | null>(null)
   const [serialMode, setSerialMode] = useState(false)
   const [serialNo, setSerialNo] = useState('')
   const [serialTotal, setSerialTotal] = useState('')
@@ -207,6 +217,10 @@ export function CardFormDialog ({
     setError(null)
     setIdentifyBanner(null)
     setVerifyLowConfidence(false)
+    setInstantEstimate(null)
+    setInstantEstimating(false)
+    setInstantEstimateError(null)
+    setLastInstantEstimateSignature(null)
     setFrontFile(null)
     setBackFile(null)
     setRemoveFront(false)
@@ -284,6 +298,76 @@ export function CardFormDialog ({
   const inputCls =
     'mt-1 w-full rounded-lg border border-zinc-700 bg-[var(--color-surface)] px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20'
 
+  function instantEstimateSignatureFromValues (v: CardFormValues): string {
+    const variation = variationFromFormValues(v) ?? ''
+    return [
+      v.detected_card_kind,
+      v.detected_card_kind === 'sports' ? v.sport : '',
+      v.player_name.trim(),
+      v.year.trim(),
+      v.set_name.trim(),
+      v.card_number.trim(),
+      variation,
+      v.is_graded
+        ? `graded:${v.grading_company.trim()}:${v.grade.trim()}`
+        : `raw:${v.condition.trim()}`,
+    ].join('|')
+  }
+
+  async function requestInstantEstimate (
+    v: CardFormValues,
+  ): Promise<EstimateCardValueResponse | null> {
+    if (isFreeUser) return null
+    const signature = instantEstimateSignatureFromValues(v)
+    if (
+      signature &&
+      signature === lastInstantEstimateSignature &&
+      instantEstimate?.current_value != null
+    ) {
+      return instantEstimate
+    }
+
+    setInstantEstimateError(null)
+    setInstantEstimating(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Sign in required.')
+
+      const variation = variationFromFormValues(v)
+      const payload = {
+        card_kind: v.detected_card_kind,
+        sport: v.detected_card_kind === 'sports' ? v.sport : null,
+        player_name: v.player_name,
+        year: v.year.trim() || null,
+        set_name: v.set_name.trim() || null,
+        card_number: v.card_number.trim() || null,
+        variation: variation ?? null,
+        is_graded: v.is_graded,
+        grade: v.is_graded ? (v.grade.trim() || null) : null,
+        grading_company: v.is_graded ? (v.grading_company.trim() || null) : null,
+        condition: v.is_graded ? null : v.condition.trim() || null,
+      }
+
+      const est = await postInstantEstimateCardValue(session.access_token, payload)
+      if ('error' in est && est.error) throw new Error(est.error)
+
+      setInstantEstimate(est)
+      setLastInstantEstimateSignature(signature)
+      if (est.current_value != null) {
+        setForm((prev) => ({ ...prev, current_value: String(est.current_value) }))
+      }
+      return est
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Instant estimate failed.'
+      setInstantEstimateError(msg)
+      return null
+    } finally {
+      setInstantEstimating(false)
+    }
+  }
+
   /**
    * Runs vision identify; updates form state and returns merged values for immediate submit.
    * @param banner — 'review' shows verify message; 'none' skips banner (e.g. before auto-save pipeline)
@@ -357,11 +441,16 @@ export function CardFormDialog ({
       if (banner === 'review') {
         setIdentifyBanner(
           merged.detected_card_kind === 'pokemon_tcg'
-            ? 'Identified as Pokémon TCG — no league field. Please verify below.'
+            ? 'Detected: Pokémon Card ✓ Please verify the details below.'
             : merged.detected_card_kind === 'other_tcg'
-              ? 'Identified as a trading card (not US sports). Please verify below.'
-              : 'Card identified! Please verify the details below.',
+              ? 'Detected: Other TCG ✓ Please verify the details below.'
+              : 'Detected: Sports Card ✓ Please verify the details below.',
         )
+
+        // For Pro users: load instant estimates immediately on the verify screen.
+        if (scanMode && mode === 'add' && !isFreeUser) {
+          void requestInstantEstimate(merged)
+        }
       }
       return merged
     } catch (err) {
@@ -387,9 +476,15 @@ export function CardFormDialog ({
       setIdentifyBanner('Fix the fields above, or use “Identify only” to adjust before saving.')
       return
     }
-    setIdentifyBanner('Saving card & fetching market estimate…')
+    setIdentifyBanner('Searching recent sales…')
     setSaving(true)
     try {
+      if (!isFreeUser) {
+        const est = await requestInstantEstimate(merged)
+        if (est?.current_value != null) {
+          merged.current_value = String(est.current_value)
+        }
+      }
       await onSubmit({
         values: merged,
         draftCardId,
@@ -397,7 +492,6 @@ export function CardFormDialog ({
         imageBack: backFile,
         removeImageFront: removeFront,
         removeImageBack: removeBack,
-        awaitEstimateAfterSave: true,
       })
       onClose()
     } catch (err) {
@@ -592,6 +686,52 @@ export function CardFormDialog ({
               {!hideScanCardForm && (
               <>
               <div className={ringBlock}>
+                {scanMode && mode === 'add' && (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm((f) => ({ ...f, detected_card_kind: 'sports', sport: 'NFL' }))
+                      }}
+                      className={[
+                        'rounded-lg px-3 py-1.5 text-sm font-medium transition',
+                        form.detected_card_kind === 'sports'
+                          ? 'bg-slab-teal text-zinc-950'
+                          : 'border border-zinc-600/80 bg-white/5 text-zinc-300 hover:bg-white/10',
+                      ].join(' ')}
+                    >
+                      🏈 Sports Card
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm((f) => ({ ...f, detected_card_kind: 'pokemon_tcg' }))
+                      }}
+                      className={[
+                        'rounded-lg px-3 py-1.5 text-sm font-medium transition',
+                        form.detected_card_kind === 'pokemon_tcg'
+                          ? 'bg-slab-teal text-zinc-950'
+                          : 'border border-zinc-600/80 bg-white/5 text-zinc-300 hover:bg-white/10',
+                      ].join(' ')}
+                    >
+                      🎮 Pokémon
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm((f) => ({ ...f, detected_card_kind: 'other_tcg' }))
+                      }}
+                      className={[
+                        'rounded-lg px-3 py-1.5 text-sm font-medium transition',
+                        form.detected_card_kind === 'other_tcg'
+                          ? 'bg-slab-teal text-zinc-950'
+                          : 'border border-zinc-600/80 bg-white/5 text-zinc-300 hover:bg-white/10',
+                      ].join(' ')}
+                    >
+                      📦 Other TCG
+                    </button>
+                  </div>
+                )}
                 {isSportsCardForm ? (
                   <div>
                     <label htmlFor="sport" className="text-sm font-medium text-zinc-300">
@@ -1086,6 +1226,61 @@ export function CardFormDialog ({
                       <dd className="text-right text-slab-teal-light">{preview.value}</dd>
                     </div>
                   </dl>
+
+                  {scanMode && mode === 'add' && scanDetailsRevealed && (
+                    <div className="mt-4 rounded-xl border border-zinc-700/70 bg-zinc-950/40 p-4">
+                      {isFreeUser ? (
+                        <div>
+                          <p className="text-sm font-semibold text-white">🔒 Upgrade to Pro to see instant values</p>
+                          <p className="mt-1 text-xs text-zinc-400">Pro users get values before saving.</p>
+                          <button
+                            type="button"
+                            onClick={() => onUpgradeRequest?.()}
+                            disabled={!onUpgradeRequest}
+                            className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-slab-teal px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50"
+                          >
+                            Upgrade — $5/mo
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm font-semibold text-white">💰 Estimated Market Value</p>
+                          {instantEstimating && (
+                            <p className="mt-2 text-xs text-zinc-400">Searching recent sales…</p>
+                          )}
+                          {instantEstimate && (
+                            <>
+                              <div className="mt-2 text-2xl font-bold tabular-nums text-white">
+                                ${Math.round(Number(instantEstimate.current_value ?? 0)).toLocaleString('en-US')}
+                              </div>
+                              <p className="mt-1 text-sm text-zinc-300">
+                                Range: ${Math.round(Number(instantEstimate.value_low ?? 0)).toLocaleString('en-US')} — $
+                                {Math.round(Number(instantEstimate.value_high ?? 0)).toLocaleString('en-US')}
+                              </p>
+                              <p className="mt-2 text-[11px] text-zinc-400">
+                                ● {instantEstimate.confidence ?? 'medium'} confidence
+                              </p>
+                              <p className="mt-1 text-[11px] text-zinc-500">
+                                Based on {instantEstimate.data_source ?? 'AI + market data'}.
+                              </p>
+                            </>
+                          )}
+                          {instantEstimateError && (
+                            <p className="mt-2 text-xs text-red-400">{instantEstimateError}</p>
+                          )}
+                          {!instantEstimate && !instantEstimating && !instantEstimateError && (
+                            <button
+                              type="button"
+                              onClick={() => void requestInstantEstimate(form)}
+                              className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-slab-teal px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light"
+                            >
+                              Get Instant Value Estimate
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
