@@ -164,10 +164,10 @@ function fakeCardEstimate (card: CardEstimateInput): CardEstimateResult {
 
 const SYSTEM_PROMPT = `Card analyst for US sports OR Pokémon cards.
 
-If \`sport\` is null/empty, treat the card as Pokémon (use Pokémon card context when forming eBay sold queries).
+If \`sport\` is null/empty, treat the card as Pokémon.
 If \`sport\` is one of NFL/NBA/MLB/NHL, treat it as a US sports card.
 
-Use web search for eBay sold/listing comps when available. Ground USD low/mid/high in findings; wider range + lower confidence if comps thin. Do not invent exact sold prices.`
+When web_search is available, results are restricted to SportsCardsPro.com. Use 1–3 searches to find the best-matching card page (price guide, completed auction / market sections, or product pages). Ground USD low/mid/high in dollar amounts you actually see on those pages for the matching grade/raw condition. If SportsCardsPro has no clear match, say so in reasoning, widen the range, and lower confidence. Do not invent exact prices not supported by retrieved pages.`
 
 /** Anthropic server tool — executed by Anthropic (see web search tool docs) */
 function getWebSearchTool (): Record<string, unknown> {
@@ -191,6 +191,11 @@ function getWebSearchTool (): Record<string, unknown> {
     tool.allowed_domains = domains.split(',').map((s) => s.trim()).filter(Boolean)
   } else if (process.env.PRICING_WEB_SEARCH_EBAY_ONLY === '1') {
     tool.allowed_domains = ['ebay.com']
+  } else if (process.env.PRICING_WEB_SEARCH_UNRESTRICTED === '1') {
+    /* full web — legacy / advanced */
+  } else {
+    /** Default: Claude web search only sees SportsCardsPro (no paid API required). */
+    tool.allowed_domains = ['sportscardspro.com', 'www.sportscardspro.com']
   }
   return tool
 }
@@ -222,7 +227,7 @@ const SUBMIT_CARD_ESTIMATE_TOOL = {
       },
       data_source: {
         type: 'string',
-        description: 'Use: Claude AI estimate',
+        description: 'e.g. SportsCardsPro.com (web) + Claude',
       },
     },
     required: ['low', 'mid', 'high', 'confidence', 'reasoning', 'trend'],
@@ -242,7 +247,7 @@ function buildUserPrompt (card: CardEstimateInput): string {
 Player ${card.player_name} | Yr ${card.year ?? '?'} | Set ${card.set_name ?? '?'} | #${card.card_number ?? '—'} | Var ${card.variation ?? '—'} | Sport ${card.sport ?? '?'}
 Card type: ${cardTypeLine}
 Graded ${card.is_graded} | Slab ${gradeLine} | Raw cond ${card.condition ?? '—'}
-If web_search: 1–3 tight eBay sold queries max, then submit_card_estimate once. No comps → wider range, low confidence.`
+If web_search: 1–3 SportsCardsPro-focused queries (player, year, set, card #, grade), then submit_card_estimate once. No clear SCP match → wider range, low confidence.`
 }
 
 function extractJsonFromFencedOrSlice (raw: string): string {
@@ -373,7 +378,7 @@ function normalizeEstimate (parsed: Record<string, unknown>): CardEstimateResult
   const data_source =
     typeof parsed.data_source === 'string' && parsed.data_source.trim()
       ? parsed.data_source.trim()
-      : 'Claude AI estimate'
+      : 'SportsCardsPro.com (web) + Claude'
 
   return {
     low: Math.round(low * 100) / 100,
@@ -523,11 +528,18 @@ function createAnthropicFetchAbort (
   }
 }
 
+type GetCardValueOk = {
+  ok: true
+  estimate: CardEstimateResult
+  /** True when the successful path used Anthropic web_search (restricted to SportsCardsPro by default). */
+  usedSportsCardsProWebSearch: boolean
+}
+
 async function getCardValue (
   card: CardEstimateInput,
   anthropicApiKey: string,
   options?: GetCardValueOptions,
-): Promise<{ ok: true; estimate: CardEstimateResult } | { ok: false; error: string }> {
+): Promise<GetCardValueOk | { ok: false; error: string }> {
   try {
     return await getCardValueInner(card, anthropicApiKey, options)
   } catch (e) {
@@ -541,7 +553,7 @@ async function getCardValueInner (
   card: CardEstimateInput,
   anthropicApiKey: string,
   options?: GetCardValueOptions,
-): Promise<{ ok: true; estimate: CardEstimateResult } | { ok: false; error: string }> {
+): Promise<GetCardValueOk | { ok: false; error: string }> {
   const userPrompt = buildUserPrompt(card)
   const requestSignal = options?.signal
 
@@ -816,7 +828,9 @@ async function getCardValueInner (
     }
   }
 
-  return { ok: true, estimate }
+  const usedSportsCardsProWebSearch = Boolean(completedWithWebSearchTools)
+
+  return { ok: true, estimate, usedSportsCardsProWebSearch }
 }
 
 
@@ -859,6 +873,8 @@ function firstEstimatePassUsesWebSearch (): boolean {
   return (
     process.env.PRICING_ENABLE_WEB_SEARCH === '1' ||
     process.env.PRICING_WEB_SEARCH_EBAY_ONLY === '1' ||
+    process.env.PRICING_WEB_SEARCH_SPORTSCARDSPRO_ONLY === '1' ||
+    process.env.PRICING_WEB_SEARCH_UNRESTRICTED === '1' ||
     Boolean(process.env.PRICING_WEB_SEARCH_ALLOWED_DOMAINS?.trim())
   )
 }
@@ -942,12 +958,12 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
     const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const anthropicApiKey = process.env.ANTHROPIC_API_KEY
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim() || ''
 
     if (!supabaseUrl || !supabaseServiceRole) {
       return jsonError(res, 500, 'Missing Supabase server configuration.')
     }
-    if (!anthropicApiKey) {
+    if (!isDemoMode() && !anthropicApiKey) {
       return jsonError(res, 500, 'Missing ANTHROPIC_API_KEY.')
     }
 
@@ -1044,7 +1060,10 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       card = row as CardRow
       const lastAt = card.last_updated ? new Date(card.last_updated).getTime() : 0
       const freshSource =
-        card.pricing_source === 'claude_estimate' || card.pricing_source === 'demo_mode'
+        card.pricing_source === 'claude_estimate' ||
+        card.pricing_source === 'sportscardspro_web' ||
+        card.pricing_source === 'sportscardspro' ||
+        card.pricing_source === 'demo_mode'
       const fresh =
         Number.isFinite(lastAt) &&
         Date.now() - lastAt < CACHE_MS &&
@@ -1157,10 +1176,6 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     }
 
     const anthropicKey = anthropicApiKey
-    if (!anthropicKey) {
-      return jsonError(res, 500, 'Missing ANTHROPIC_API_KEY.')
-    }
-
     let result: Awaited<ReturnType<typeof getCardValue>>
     const wall = createEstimateWall()
     const noAutoRetry = process.env.PRICING_NO_SEARCH_RETRY === '1'
@@ -1211,8 +1226,9 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       wall?.clear()
     }
 
-    const { estimate } = result
+    const { estimate, usedSportsCardsProWebSearch } = result
     const nowIso = new Date().toISOString()
+    const pricingSource = usedSportsCardsProWebSearch ? 'sportscardspro_web' : 'claude_estimate'
 
     if (instantMode) {
       return jsonOk(res, 200, {
@@ -1223,7 +1239,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
         confidence: estimate.confidence,
         trend: estimate.trend,
         value_note: estimate.reasoning,
-        pricing_source: 'claude_estimate',
+        pricing_source: pricingSource,
         last_updated: nowIso,
         data_source: estimate.data_source,
       })
@@ -1236,7 +1252,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       confidence: estimate.confidence,
       trend: estimate.trend,
       value_note: estimate.reasoning,
-      pricing_source: 'claude_estimate',
+      pricing_source: pricingSource,
       last_updated: nowIso,
     }
 
@@ -1254,7 +1270,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       card_id: card.id,
       recorded_value: estimate.mid,
       recorded_at: nowIso,
-      source: estimate.data_source || 'claude_estimate',
+      source: estimate.data_source || pricingSource,
     })
 
     if (histErr) {
@@ -1269,7 +1285,7 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       confidence: estimate.confidence,
       trend: estimate.trend,
       value_note: estimate.reasoning,
-      pricing_source: 'claude_estimate',
+      pricing_source: pricingSource,
       last_updated: nowIso,
       data_source: estimate.data_source,
     })

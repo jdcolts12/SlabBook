@@ -1243,15 +1243,14 @@ export function CardFormDialog ({
                     <div className="mt-4 rounded-xl border border-zinc-700/70 bg-zinc-950/40 p-4">
                       {isFreeUser ? (
                         <div>
-                          <p className="text-sm font-semibold text-white">🔒 Upgrade to Pro to see instant values</p>
-                          <p className="mt-1 text-xs text-zinc-400">Pro users get values before saving.</p>
+                          <p className="text-sm font-semibold text-white">Pro shows a value before you save</p>
                           <button
                             type="button"
                             onClick={() => onUpgradeRequest?.()}
                             disabled={!onUpgradeRequest}
                             className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-slab-teal px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50"
                           >
-                            Upgrade — $5/mo
+                            Upgrade
                           </button>
                         </div>
                       ) : (
@@ -1263,14 +1262,14 @@ export function CardFormDialog ({
                               : 'border-transparent',
                           ].join(' ')}
                         >
-                          <p className="text-sm font-semibold text-white">💰 Estimated Market Value</p>
+                          <p className="text-sm font-semibold text-white">Instant estimate</p>
                           {instantEstimating && (
                             <p className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
                               <span
                                 className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-slab-teal/30 border-t-slab-teal-light"
                                 aria-hidden
                               />
-                              Searching recent sales…
+                              Looking up…
                             </p>
                           )}
                           {instantEstimate && (
@@ -1279,14 +1278,12 @@ export function CardFormDialog ({
                                 ${Math.round(Number(instantEstimate.current_value ?? 0)).toLocaleString('en-US')}
                               </div>
                               <p className="mt-1 text-sm text-zinc-300">
-                                Range: ${Math.round(Number(instantEstimate.value_low ?? 0)).toLocaleString('en-US')} — $
+                                ${Math.round(Number(instantEstimate.value_low ?? 0)).toLocaleString('en-US')} — $
                                 {Math.round(Number(instantEstimate.value_high ?? 0)).toLocaleString('en-US')}
                               </p>
-                              <p className="mt-2 text-[11px] text-zinc-400">
-                                ● {instantEstimate.confidence ?? 'medium'} confidence
-                              </p>
-                              <p className="mt-1 text-[11px] text-zinc-500">
-                                Based on {instantEstimate.data_source ?? 'AI + market data'}.
+                              <p className="mt-2 text-[11px] text-zinc-500">
+                                {instantEstimate.confidence ?? 'medium'} confidence ·{' '}
+                                {instantEstimate.data_source ?? 'AI estimate'}
                               </p>
                             </>
                           )}
@@ -1299,7 +1296,7 @@ export function CardFormDialog ({
                               onClick={() => void requestInstantEstimate(form)}
                               className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-slab-teal px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light"
                             >
-                              Get Instant Value Estimate
+                              Get estimate
                             </button>
                           )}
                         </div>

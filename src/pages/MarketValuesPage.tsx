@@ -602,8 +602,7 @@ export function MarketValuesPage () {
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-6 py-8 text-center">
           <p className="text-lg font-semibold text-amber-100/95">No estimates yet</p>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zinc-400">
-            SlabBook uses Claude to suggest low, mid, and high values from training knowledge of the hobby market.
-            Run a bulk estimate to fill in the table, or refresh one card at a time after each estimate completes.
+            Use “Estimate All” or refresh cards in your collection. Verify values before you trade.
           </p>
           <button
             type="button"
@@ -780,7 +779,7 @@ export function MarketValuesPage () {
           </div>
 
           <p className="text-center text-[11px] leading-relaxed text-zinc-600">
-            Powered by Claude AI · Values update every 48 hours · Switch to live eBay pricing coming soon
+            Estimates refresh from your collection · Not financial advice
           </p>
         </>
       )}

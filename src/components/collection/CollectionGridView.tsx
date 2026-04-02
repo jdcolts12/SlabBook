@@ -81,8 +81,8 @@ export function CollectionGridView ({
                     }}
                     disabled={Boolean(refreshingIds[c.id])}
                     className="shrink-0 rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-50"
-                    title={c.current_value == null ? 'Get value' : 'Refresh AI estimate'}
-                    aria-label={c.current_value == null ? 'Get value' : 'Refresh AI estimate'}
+                    title={c.current_value == null ? 'Get estimate' : 'Refresh estimate'}
+                    aria-label={c.current_value == null ? 'Get estimate' : 'Refresh estimate'}
                   >
                     {estimating ? (
                       <span
@@ -108,31 +108,9 @@ export function CollectionGridView ({
                     estimating ? 'ring-1 ring-inset ring-slab-teal/35 bg-slab-teal/[0.06] px-2 py-1 -mx-0.5' : '',
                   ].join(' ')}
                 >
-                  <CardValueDisplay card={c} money={money} align="left" showDisclaimer={false} />
+                  <CardValueDisplay card={c} money={money} align="left" showLastUpdated showAttribution={false} />
                 </div>
                 <SportsCardCompLinks card={c} className="mt-2" />
-                {showActions && c.current_value == null && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isFreeUser) {
-                        onUpgradeRequest?.()
-                        return
-                      }
-                      void onRefresh(c)
-                    }}
-                    disabled={estimating}
-                    className="mt-2 inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-600/80 bg-zinc-800/40 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-zinc-700/40 disabled:opacity-50"
-                  >
-                    {estimating && (
-                      <span
-                        className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-zinc-600 border-t-slab-teal"
-                        aria-hidden
-                      />
-                    )}
-                    {estimating ? 'Searching sales…' : 'Get Value'}
-                  </button>
-                )}
                 {estErr && (
                   <p className="mt-1 text-[11px] leading-snug text-red-400 break-words" title={estErr}>
                     {estErr.length > 220 ? `${estErr.slice(0, 220)}…` : estErr}

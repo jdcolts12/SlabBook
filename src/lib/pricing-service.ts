@@ -1,10 +1,8 @@
 /**
  * Client-side pricing entry point.
  *
- * Server-side estimation lives in `api/estimate-card-value.ts` (Claude, single Vercel function).
- * TODO: Replace the server `getCardValue` implementation with a real pricing API (e.g. 130point,
- * eBay sold listings). The SPA should keep importing from this file so only one client call site
- * needs review when switching providers.
+ * Server-side estimation lives in `api/estimate-card-value.ts`: Claude + optional web search
+ * (default: restricted to SportsCardsPro.com). The SPA should keep importing from this file.
  */
 
 import { postEstimateCardValue, type EstimateCardValueResponse } from './estimateCardValueApi'

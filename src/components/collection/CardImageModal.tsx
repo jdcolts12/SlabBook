@@ -149,13 +149,12 @@ export function CardImageModal ({
               {isFreeUser && card.current_value == null ? (
                 <div className="mt-2">
                   <p className="select-none text-2xl font-bold tracking-wide text-zinc-500 blur-[2px]">$0,000</p>
-                  <p className="mt-1 text-xs text-zinc-400">Unlock instant valuations — Upgrade to Pro $5/mo</p>
                   <button
                     type="button"
                     onClick={onUpgrade}
                     className="mt-2 rounded-lg bg-slab-teal px-3 py-2 text-xs font-semibold text-zinc-950 hover:bg-slab-teal-light"
                   >
-                    Upgrade to Pro
+                    Upgrade for values
                   </button>
                 </div>
               ) : (
@@ -175,7 +174,7 @@ export function CardImageModal ({
                         aria-hidden
                       />
                     )}
-                    {refreshing ? 'Searching sales…' : (card.current_value == null ? 'Get Value' : 'Refresh Value')}
+                    {refreshing ? 'Working…' : (card.current_value == null ? 'Get value' : 'Refresh')}
                   </button>
                 </>
               )}

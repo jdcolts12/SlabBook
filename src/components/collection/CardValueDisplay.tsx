@@ -6,9 +6,12 @@ type Props = {
   card: Card
   money: Intl.NumberFormat
   align?: 'left' | 'right'
-  compactDisclaimer?: boolean
-  /** When false, omit the long AI disclaimer (e.g. grid cards; banner already on page). */
+  /** Rare: inline disclaimer (collection/market pages use a page-level note instead). */
   showDisclaimer?: boolean
+  /** When false, omit “Updated …” (e.g. table has its own Updated column). Default true. */
+  showLastUpdated?: boolean
+  /** Pricing source sub-label (SCP web / Claude). Default false — use “How we estimated” details instead. */
+  showAttribution?: boolean
 }
 
 function ConfidenceBadge ({ confidence }: { confidence: string | null }) {
@@ -52,8 +55,9 @@ export function CardValueDisplay ({
   card,
   money,
   align = 'left',
-  compactDisclaimer = false,
-  showDisclaimer = true,
+  showDisclaimer = false,
+  showLastUpdated = true,
+  showAttribution = false,
 }: Props) {
   const mid = card.current_value != null ? Number(card.current_value) : null
   const low = card.value_low != null ? Number(card.value_low) : null
@@ -66,7 +70,9 @@ export function CardValueDisplay ({
     return (
       <div className={alignCls}>
         <span className="text-zinc-500">—</span>
-        <p className="mt-1 text-[10px] leading-snug text-zinc-600">{formatLastUpdatedLine(card.last_updated)}</p>
+        {showLastUpdated && (
+          <p className="mt-1 text-[10px] leading-snug text-zinc-600">{formatLastUpdatedLine(card.last_updated)}</p>
+        )}
       </div>
     )
   }
@@ -97,24 +103,21 @@ export function CardValueDisplay ({
           <p className="mt-1.5 pl-0 text-left text-zinc-500">{note}</p>
         </details>
       )}
-      <p className="mt-1 text-[10px] text-zinc-600">{formatLastUpdatedLine(card.last_updated)}</p>
-      {card.pricing_source === 'demo_mode' && (
-        <p className="mt-0.5 text-[9px] text-amber-400/90">Demo estimate — not AI</p>
+      {showLastUpdated && (
+        <p className="mt-1 text-[10px] text-zinc-600">{formatLastUpdatedLine(card.last_updated)}</p>
       )}
-      {(card.pricing_source === 'claude_estimate' || card.confidence) &&
-        card.pricing_source !== 'demo_mode' && (
-        <p className="mt-0.5 text-[9px] text-zinc-600">Powered by Claude AI</p>
+      {card.pricing_source === 'demo_mode' && (
+        <p className="mt-0.5 text-[9px] text-amber-400/90">Demo estimate</p>
+      )}
+      {showAttribution &&
+        (card.pricing_source === 'sportscardspro_web' || card.pricing_source === 'sportscardspro') && (
+        <p className="mt-0.5 text-[9px] text-zinc-600">SportsCardsPro</p>
+      )}
+      {showAttribution && card.pricing_source === 'claude_estimate' && (
+        <p className="mt-0.5 text-[9px] text-zinc-600">Model estimate (no web search)</p>
       )}
       {showDisclaimer && (
-        <p
-          className={
-            compactDisclaimer
-              ? 'mt-1 line-clamp-2 text-[9px] leading-snug text-zinc-600'
-              : 'mt-1 text-[9px] leading-snug text-zinc-600'
-          }
-        >
-          {AI_VALUE_DISCLAIMER}
-        </p>
+        <p className="mt-1 text-[9px] leading-snug text-zinc-600">{AI_VALUE_DISCLAIMER}</p>
       )}
     </div>
   )

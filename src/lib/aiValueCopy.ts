@@ -1,6 +1,7 @@
+/** Shown once per collection / market page — keep short */
 export const AI_VALUE_DISCLAIMER =
-  'Values are AI estimates based on historical market data and may not reflect current prices. Always verify with recent eBay sold listings before buying or selling.'
+  'Estimates are indicative only. Confirm with recent comps before you trade.'
 
 /** Amber banner copy on the Market Values dashboard tab */
 export const MARKET_VALUES_BANNER =
-  'Values are Claude AI estimates based on historical market data. Always verify with recent eBay sold listings before buying or selling.'
+  'Estimates use AI (optionally SportsCardsPro.com web search). Not financial advice — verify before you trade.'

@@ -163,7 +163,7 @@ export function CollectionPage () {
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [upgradeLoading, setUpgradeLoading] = useState(false)
   const [scanModeOpen, setScanModeOpen] = useState(false)
-  const [postAdd, setPostAdd] = useState<{ cardId: string; estimating: boolean; done: boolean } | null>(null)
+  const [showFreeUpgradeAfterAdd, setShowFreeUpgradeAfterAdd] = useState(false)
 
   useEffect(() => {
     try {
@@ -474,7 +474,7 @@ export function CollectionPage () {
       if (!isFreeUser && added.current_value != null) {
         setToastMessage('Card added — instant value estimate ready.')
         await loadCards({ silent: true })
-        setPostAdd(null)
+        setShowFreeUpgradeAfterAdd(false)
         return
       }
 
@@ -490,19 +490,26 @@ export function CollectionPage () {
         } else {
           setToastMessage('Card added. Use Refresh on the card to fetch an estimate.')
         }
-        setPostAdd(null)
+        setShowFreeUpgradeAfterAdd(false)
         return
       }
 
-      setToastMessage('Card added to your collection.')
       await loadCards({ silent: true })
       if (isFreeUser) {
-        setPostAdd({ cardId: added.id, estimating: false, done: false })
+        setToastMessage('Card added to your collection.')
+        setShowFreeUpgradeAfterAdd(true)
       } else {
-        setPostAdd({ cardId: added.id, estimating: true, done: false })
+        setToastMessage('Card added.')
         void (async () => {
-          await estimateCard(added, { forceRefresh: true })
-          setPostAdd({ cardId: added.id, estimating: false, done: true })
+          const estimated = await estimateCard(added, { forceRefresh: true })
+          await loadCards({ silent: true })
+          if (estimated?.current_value != null) {
+            setToastMessage(`Added — est. ${money.format(Number(estimated.current_value))}`)
+          } else if (estimated) {
+            setToastMessage('Card added. Tap ↻ on the card if you want to retry the estimate.')
+          } else {
+            setToastMessage('Card added. Tap ↻ on the card to fetch an estimate.')
+          }
         })()
       }
       return
@@ -613,86 +620,33 @@ export function CollectionPage () {
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
       )}
-      {postAdd && (
-        <div
-          className={[
-            'rounded-xl border p-4 transition-colors',
-            !isFreeUser && postAdd.estimating
-              ? 'border-slab-teal/50 bg-slab-teal/[0.12] shadow-[0_0_0_1px_rgba(45,212,191,0.12)]'
-              : 'border-slab-teal/30 bg-slab-teal/10',
-          ].join(' ')}
-        >
-          {isFreeUser ? (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold text-slab-teal-light">Card added! Upgrade to Pro to get an instant AI market value estimate.</p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setUpgradeOpen(true)}
-                  className="rounded-lg bg-slab-teal px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light"
-                >
-                  Upgrade to Pro
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPostAdd(null)}
-                  className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
-                >
-                  View Collection
-                </button>
-              </div>
+      {showFreeUpgradeAfterAdd && isFreeUser && (
+        <div className="rounded-xl border border-slab-teal/30 bg-slab-teal/10 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="font-semibold text-slab-teal-light">Pro unlocks AI values on your cards.</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setUpgradeOpen(true)}
+                className="rounded-lg bg-slab-teal px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light"
+              >
+                Upgrade
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFreeUpgradeAfterAdd(false)}
+                className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+              >
+                Dismiss
+              </button>
             </div>
-          ) : (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold text-slab-teal-light">Card added! Get your instant value estimate.</p>
-                <p className="mt-1 text-xs text-zinc-400">
-                  {postAdd.estimating ? 'Searching recent sales...' : postAdd.done ? 'Estimate complete.' : 'Ready to estimate.'}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={postAdd.estimating}
-                  onClick={() => {
-                    const c = cards.find((x) => x.id === postAdd.cardId)
-                    if (!c) return
-                    setPostAdd((p) => (p ? { ...p, estimating: true } : p))
-                    void (async () => {
-                      await estimateCard(c, { forceRefresh: true })
-                      setPostAdd((p) => (p ? { ...p, estimating: false, done: true } : p))
-                    })()
-                  }}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-slab-teal px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50"
-                >
-                  {postAdd.estimating && (
-                    <span
-                      className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-zinc-900/25 border-t-zinc-950"
-                      aria-hidden
-                    />
-                  )}
-                  {postAdd.estimating ? 'Searching sales...' : 'Get Estimate Now'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPostAdd(null)}
-                  className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
-                >
-                  View in Collection
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Sports cards</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Rookies, autos, and slabs — Pokémon lives in its own tab. Table or grid, filters, and AI values.
-          </p>
+          <p className="mt-1 text-sm text-zinc-400">Track slabs here; Pokémon has its own tab.</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
           <button
