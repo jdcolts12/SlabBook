@@ -55,6 +55,23 @@ export function CardImageModal ({
   const gain = cardGainDollars(card)
   const gainPct = cardGainPercent(card)
 
+  const sportsCardsProQuery = [
+    card.player_name,
+    card.year != null ? String(card.year) : null,
+    card.set_name,
+    card.card_number,
+    card.variation,
+    card.sport,
+  ]
+    .filter((x): x is string => Boolean(x && x.trim()))
+    .join(' ')
+    .trim()
+
+  const sportsCardsProUrl =
+    sportsCardsProQuery.length > 0
+      ? `https://www.sportscardspro.com/search-products?q=${encodeURIComponent(sportsCardsProQuery)}&type=prices`
+      : ''
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-8">
       <button
@@ -184,6 +201,17 @@ export function CardImageModal ({
               >
                 View recent comps
               </a>
+
+              {sportsCardsProUrl && (
+                <a
+                  href={sportsCardsProUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-4 mt-3 inline-block text-xs font-medium text-slab-teal hover:text-slab-teal-light"
+                >
+                  SportsCardsPro recent sales
+                </a>
+              )}
             </div>
           </div>
         </div>
