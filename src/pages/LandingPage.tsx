@@ -400,17 +400,15 @@ export function LandingPage () {
       <main>
         {/* Hero */}
         <section className="relative px-4 pb-16 pt-8 sm:px-6 sm:pb-20 sm:pt-10 md:px-10 lg:pt-16">
-          <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-2 lg:items-center lg:gap-16">
-            <div className="min-w-0">
+          <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center lg:gap-14">
+            <div className="order-1 lg:order-2">
+              <HeroCollectionSlideshow />
+            </div>
+            <div className="order-2 min-w-0 lg:order-1">
               <h1 className="text-[1.65rem] font-semibold leading-[1.15] tracking-tight text-[var(--slab-text)] min-[400px]:text-3xl sm:text-4xl sm:leading-tight md:text-5xl">
                 Your Card Collection. Tracked. Valued. Intelligent.
               </h1>
-              <p className="mt-4 text-base leading-relaxed text-[var(--slab-text-muted)] sm:mt-5 sm:text-lg">
-                Sports and Pokémon TCG each get their own space in the app — plus a combined view when you want the big
-                picture. Photos, binder grid or table, and AI value estimates from live eBay comps for sports. Snap a
-                card, optional auto-identify, then portfolio insights that help you buy and sell smarter.
-              </p>
-              <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap">
+              <div className="mt-7 flex w-full max-w-md flex-col gap-3 sm:mt-8 sm:max-w-none sm:flex-row sm:flex-wrap">
                 {user ? (
                   <>
                     <Link
@@ -452,7 +450,6 @@ export function LandingPage () {
                 )}
               </div>
             </div>
-            <HeroCollectionSlideshow />
           </div>
         </section>
 

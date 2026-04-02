@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CircleDot, TrendingUp } from 'lucide-react'
+import { CircleDot, CreditCard, TrendingUp } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { redeemPromoRequest } from '../../lib/promoApi'
@@ -8,7 +8,7 @@ import { effectiveTier, planDisplayLabel, type UserPlanFields } from '../../lib/
 import { SlabBookLogo } from '../SlabBookLogo'
 import { PromoCodeInput } from '../promo/PromoCodeInput'
 
-const nav = [
+const primaryNav = [
   { to: '/dashboard', label: 'Dashboard', end: true },
   { to: '/dashboard/collection?scan=1', label: 'Scan & price', end: false },
   { to: '/dashboard/collection', label: 'Collection', end: true },
@@ -16,11 +16,14 @@ const nav = [
   { to: '/dashboard/market-values', label: 'Market Values', end: false },
   { to: '/dashboard/insights', label: 'AI Insights', end: false },
   { to: '/dashboard/alerts', label: 'Price Alerts', end: false },
-  { to: '/dashboard/settings/billing', label: 'Billing', end: false },
 ] as const
 
-function NavIcon ({ name }: { name: (typeof nav)[number]['label'] }) {
-  const cls = 'h-5 w-5 shrink-0'
+const billingNav = { to: '/dashboard/settings/billing', label: 'Billing', end: false } as const
+
+type NavLabel = (typeof primaryNav)[number]['label'] | typeof billingNav.label
+
+function NavIcon ({ name }: { name: NavLabel }) {
+  const cls = 'h-[1.125rem] w-[1.125rem] shrink-0'
   switch (name) {
     case 'Dashboard':
       return (
@@ -62,11 +65,7 @@ function NavIcon ({ name }: { name: (typeof nav)[number]['label'] }) {
         </svg>
       )
     case 'Billing':
-      return (
-        <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-        </svg>
-      )
+      return <CreditCard className={cls} strokeWidth={1.5} aria-hidden />
     default:
       return null
   }
@@ -209,8 +208,8 @@ export function DashboardLayout () {
   }
 
   const sidebar = (
-    <aside className="flex h-full w-64 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]">
-      <div className="flex h-16 items-center border-b border-[var(--color-border-subtle)] px-5">
+    <aside className="flex h-full w-60 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]">
+      <div className="flex h-14 shrink-0 items-center border-b border-[var(--color-border-subtle)] px-4">
         <Link
           to="/dashboard"
           className="focus:outline-none focus-visible:ring-2 focus-visible:ring-slab-teal/40 rounded-lg"
@@ -218,8 +217,8 @@ export function DashboardLayout () {
           <SlabBookLogo size="md" />
         </Link>
       </div>
-      <nav className="flex flex-1 flex-col gap-0.5 p-3" aria-label="Main">
-        {nav.map((item) => (
+      <nav className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 py-2" aria-label="Main">
+        {primaryNav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -228,7 +227,7 @@ export function DashboardLayout () {
             className={({ isActive }) =>
               [
                 item.label === 'Dashboard' ? 'hidden lg:flex' : 'flex',
-                'items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium leading-snug transition-colors',
                 item.label === 'Scan & price'
                   ? 'bg-slab-teal text-zinc-950 hover:bg-slab-teal-light'
                   : isActive
@@ -242,37 +241,59 @@ export function DashboardLayout () {
           </NavLink>
         ))}
       </nav>
-      <div id="promo-upgrade" className="border-t border-[var(--color-border-subtle)] p-4">
-        <p className="truncate text-xs text-zinc-500">{user?.email}</p>
-        {membershipRow && (
-          <p className="mt-2">
-            <span className="inline-flex items-center rounded-full border border-slab-teal/40 bg-slab-teal/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slab-teal-light">
-              Plan: {planDisplayLabel(membershipRow)}
-            </span>
-          </p>
-        )}
-        {membershipRow && effectiveTier(membershipRow) === 'free' && (
-          <Link
-            to="/pricing"
-            className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-slab-teal px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-slab-teal-light"
-          >
-            Upgrade to Pro
-          </Link>
-        )}
-        <p className="mt-1 text-[11px] text-zinc-400">
-          Promo: {promoCodeUsed ?? 'None'}
+      <div id="promo-upgrade" className="shrink-0 border-t border-[var(--color-border-subtle)] px-2.5 pb-2 pt-1.5">
+        <NavLink
+          to={billingNav.to}
+          end={billingNav.end}
+          onClick={() => setMobileOpen(false)}
+          className={({ isActive }) =>
+            [
+              'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+              isActive
+                ? 'bg-slab-teal/10 text-slab-teal-light'
+                : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+            ].join(' ')
+          }
+        >
+          <NavIcon name={billingNav.label} />
+          {billingNav.label}
+        </NavLink>
+
+        <div className="my-2 h-px bg-[var(--color-border-subtle)]" aria-hidden />
+
+        <p className="truncate text-[10px] leading-tight text-zinc-500" title={user?.email ?? undefined}>
+          {user?.email}
         </p>
-        {trialEndsAt && (
-          <p className="mt-1 text-[11px] text-zinc-500">Trial ends: {prettyDate(trialEndsAt) ?? trialEndsAt}</p>
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {membershipRow && (
+            <span className="inline-flex max-w-full items-center truncate rounded-md border border-slab-teal/35 bg-slab-teal/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slab-teal-light">
+              {planDisplayLabel(membershipRow)}
+            </span>
+          )}
+          {membershipRow && effectiveTier(membershipRow) === 'free' && (
+            <Link
+              to="/pricing"
+              className="text-[10px] font-semibold text-slab-teal-muted underline-offset-2 hover:text-slab-teal-light hover:underline"
+            >
+              Upgrade
+            </Link>
+          )}
+        </div>
+
+        {(promoCodeUsed || trialEndsAt || subscriptionEndsAt) && (
+          <div className="mt-1 space-y-0.5 text-[10px] leading-snug text-zinc-500">
+            {promoCodeUsed ? <p className="truncate">Promo: {promoCodeUsed}</p> : null}
+            {trialEndsAt ? <p>Trial · {prettyDate(trialEndsAt) ?? trialEndsAt}</p> : null}
+            {subscriptionEndsAt ? <p>Sub · {prettyDate(subscriptionEndsAt) ?? subscriptionEndsAt}</p> : null}
+          </div>
         )}
-        {subscriptionEndsAt && (
-          <p className="mt-1 text-[11px] text-zinc-500">Sub ends: {prettyDate(subscriptionEndsAt) ?? subscriptionEndsAt}</p>
-        )}
-        <details className="mt-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface)] p-2">
-          <summary className="cursor-pointer list-none rounded-md bg-slab-teal/15 px-2 py-1.5 text-center text-[11px] font-semibold text-slab-teal-light">
+
+        <details className="mt-1.5 rounded-md border border-[var(--color-border-subtle)]/80 bg-[var(--color-surface)]/50 px-1.5 py-1">
+          <summary className="cursor-pointer list-none text-center text-[10px] font-semibold text-zinc-400 marker:hidden [&::-webkit-details-marker]:hidden">
             Apply promo
           </summary>
-          <div className="mt-2">
+          <div className="mt-1.5 pb-0.5">
             <PromoCodeInput
               value={promoCode}
               onChange={setPromoCode}
@@ -284,7 +305,7 @@ export function DashboardLayout () {
             <select
               value={promoTier}
               onChange={(e) => setPromoTier(e.target.value)}
-              className="mt-2 h-9 w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-2 text-xs text-[var(--slab-text)] focus:border-slab-teal/50 focus:outline-none focus:ring-2 focus:ring-slab-teal/20"
+              className="mt-1.5 h-8 w-full rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-2 text-[10px] text-[var(--slab-text)] focus:border-slab-teal/50 focus:outline-none focus:ring-1 focus:ring-slab-teal/20"
             >
               <option value="free">Free</option>
               <option value="pro">Pro</option>
@@ -294,29 +315,35 @@ export function DashboardLayout () {
               type="button"
               onClick={() => void applyPromoCode()}
               disabled={applyingPromo || !promoCode.trim()}
-              className="mt-2 w-full rounded-lg bg-slab-teal px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
+              className="mt-1.5 w-full rounded-md bg-slab-teal px-2 py-1.5 text-[10px] font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50"
             >
-              {applyingPromo ? 'Applying…' : 'Apply Code'}
+              {applyingPromo ? 'Applying…' : 'Apply'}
             </button>
             {promoResult && (
-              <p className={promoResult.type === 'success' ? 'mt-2 text-[11px] text-slab-teal-light' : 'mt-2 text-[11px] text-red-400'}>
+              <p
+                className={
+                  promoResult.type === 'success'
+                    ? 'mt-1.5 text-[10px] leading-snug text-slab-teal-light'
+                    : 'mt-1.5 text-[10px] leading-snug text-red-400'
+                }
+              >
                 {promoResult.message}
               </p>
             )}
           </div>
         </details>
+
         {import.meta.env.VITE_GIT_SHA ? (
-          <p className="mt-2 font-mono text-[10px] text-zinc-600" title="Vercel build commit">
-            Build {import.meta.env.VITE_GIT_SHA.slice(0, 7)}
-            {import.meta.env.VITE_VERCEL_ENV
-              ? ` · ${import.meta.env.VITE_VERCEL_ENV}`
-              : ''}
+          <p className="mt-1 font-mono text-[9px] text-zinc-600" title="Vercel build commit">
+            {import.meta.env.VITE_GIT_SHA.slice(0, 7)}
+            {import.meta.env.VITE_VERCEL_ENV ? ` · ${import.meta.env.VITE_VERCEL_ENV}` : ''}
           </p>
         ) : null}
+
         <button
           type="button"
           onClick={handleSignOut}
-          className="mt-3 w-full rounded-lg border border-zinc-700/80 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/5"
+          className="mt-1.5 w-full rounded-md border border-zinc-700/60 px-2 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-600 hover:bg-white/5 hover:text-zinc-200"
         >
           Sign out
         </button>
@@ -340,14 +367,14 @@ export function DashboardLayout () {
       )}
       <div
         className={[
-          'fixed inset-y-0 left-0 z-50 w-64 transform transition-transform lg:hidden',
+          'fixed inset-y-0 left-0 z-50 w-60 transform transition-transform lg:hidden',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         ].join(' ')}
       >
         {sidebar}
       </div>
 
-      <div className="flex min-h-dvh flex-1 flex-col lg:pl-64">
+      <div className="flex min-h-dvh flex-1 flex-col lg:pl-60">
         {(import.meta.env.VITE_DEMO_MODE === 'true' || import.meta.env.VITE_DEMO_MODE === '1') && (
           <div
             className="border-b border-amber-500/40 bg-amber-500/15 px-4 py-2 text-center text-xs font-medium text-amber-100"
