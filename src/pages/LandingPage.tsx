@@ -6,6 +6,7 @@ import { PricingSection, type TierId } from '../components/marketing/PricingSect
 import { useAuth } from '../hooks/useAuth'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { effectiveTier } from '../lib/tierLimits'
+import { scanCtaSurface } from '../lib/scanCtaStyles'
 
 const FAQ = [
   {
@@ -389,7 +390,7 @@ export function LandingPage () {
   }
 
   return (
-    <div className="relative min-h-dvh overflow-x-hidden bg-[var(--color-surface)]">
+    <div className="relative min-h-dvh min-w-0 overflow-x-clip bg-[var(--color-surface)]">
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(29,158,117,0.14),transparent)]"
         aria-hidden
@@ -397,9 +398,9 @@ export function LandingPage () {
 
       <MarketingNav />
 
-      <main>
+      <main className="min-w-0 overflow-x-clip">
         {/* Hero */}
-        <section className="relative px-4 pb-16 pt-8 sm:px-6 sm:pb-20 sm:pt-10 md:px-10 lg:pt-16">
+        <section className="relative px-3 pb-16 pt-6 sm:px-6 sm:pb-20 sm:pt-10 md:px-10 lg:pt-16">
           <div className="mx-auto flex max-w-6xl flex-col gap-8 lg:grid lg:grid-cols-2 lg:items-center lg:gap-14">
             <h1 className="text-[1.65rem] font-semibold leading-[1.15] tracking-tight text-[var(--slab-text)] min-[400px]:text-3xl sm:text-4xl sm:leading-tight md:text-5xl lg:col-start-1 lg:row-start-1">
               Your Card Collection. Tracked. Valued. Intelligent.
@@ -407,7 +408,10 @@ export function LandingPage () {
 
             <Link
               to={user ? '/dashboard/collection?scan=1' : '/signup'}
-              className="inline-flex min-h-[48px] w-full max-w-md items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-semibold text-[var(--slab-text)] transition hover:border-slab-teal/40 lg:hidden"
+              className={[
+                'inline-flex min-h-[48px] w-full max-w-md items-center justify-center rounded-xl px-6 py-3.5 text-base lg:hidden',
+                scanCtaSurface,
+              ].join(' ')}
             >
               Scan &amp; price
             </Link>
@@ -427,7 +431,10 @@ export function LandingPage () {
                   </Link>
                   <Link
                     to="/dashboard/collection?scan=1"
-                    className="hidden min-h-[48px] w-full items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40 sm:w-auto sm:min-w-[11rem] sm:px-8 lg:inline-flex"
+                    className={[
+                      'hidden min-h-[48px] w-full items-center justify-center rounded-xl px-6 py-3.5 text-base sm:w-auto sm:min-w-[11rem] sm:px-8 lg:inline-flex',
+                      scanCtaSurface,
+                    ].join(' ')}
                   >
                     Scan & price
                   </Link>
@@ -461,7 +468,7 @@ export function LandingPage () {
         </section>
 
         {/* Social proof */}
-        <section className="border-y border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/50 px-4 py-8 sm:px-6 md:px-10">
+        <section className="border-y border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/50 px-3 py-8 sm:px-6 md:px-10">
           <p className="mx-auto max-w-md text-center text-sm font-medium leading-snug text-[var(--slab-text-muted)] sm:max-w-none">
             NFL · NBA · MLB · NHL · Soccer · MMA · Pokémon TCG — photos, binder grid, and AI in one place
           </p>
@@ -484,7 +491,7 @@ export function LandingPage () {
         </section>
 
         {/* Features */}
-        <section id="features" className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 md:px-10">
+        <section id="features" className="scroll-mt-24 px-3 py-16 sm:px-6 sm:py-20 md:px-10">
           <h2 className="text-center text-2xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-3xl">Features</h2>
           <div className="mx-auto mt-10 grid max-w-6xl gap-6 sm:mt-12 sm:gap-8 md:grid-cols-3">
             {[
@@ -522,7 +529,7 @@ export function LandingPage () {
         <section
           id="how"
           ref={howRef}
-          className="scroll-mt-24 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/35 px-4 py-16 sm:px-6 sm:py-20 md:px-10"
+          className="scroll-mt-24 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/35 px-3 py-16 sm:px-6 sm:py-20 md:px-10"
         >
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="text-2xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-3xl md:text-4xl">
@@ -597,7 +604,7 @@ export function LandingPage () {
         />
 
         {/* FAQ */}
-        <section id="faq" className="scroll-mt-24 border-t border-[var(--color-border-subtle)] px-4 py-16 sm:px-6 sm:py-20 md:px-10">
+        <section id="faq" className="scroll-mt-24 border-t border-[var(--color-border-subtle)] px-3 py-16 sm:px-6 sm:py-20 md:px-10">
           <h2 className="text-center text-2xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-3xl">FAQ</h2>
           <div className="mx-auto mt-10 max-w-2xl space-y-6">
             {FAQ.map((item) => (

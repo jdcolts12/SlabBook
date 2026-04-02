@@ -68,14 +68,17 @@ export function WatchlistPage () {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-6">
       <CollectionSubnav />
 
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Watchlist</h1>
         <p className="mt-1 text-sm text-zinc-400">
           Cards you saved from scan without adding to your collection.{' '}
-          <Link to="/dashboard/collection?scan=1" className="text-slab-teal-muted hover:underline">
+          <Link
+            to="/dashboard/collection?scan=1"
+            className="font-semibold text-emerald-400 underline-offset-4 hover:text-emerald-300 hover:underline"
+          >
             Scan &amp; price
           </Link>
         </p>

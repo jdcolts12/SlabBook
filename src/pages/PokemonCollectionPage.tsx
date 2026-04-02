@@ -350,7 +350,7 @@ export function PokemonCollectionPage () {
   const hasCards = cards.length > 0
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-6">
       <CollectionSubnav />
 
       {toastMessage && (

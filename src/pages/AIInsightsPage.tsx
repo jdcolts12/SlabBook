@@ -332,7 +332,7 @@ export function AIInsightsPage () {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">AI Insights</h1>

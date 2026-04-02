@@ -3,6 +3,7 @@ import { CircleDot, CreditCard, TrendingUp } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { redeemPromoRequest } from '../../lib/promoApi'
+import { scanCtaFab, scanCtaNavItem } from '../../lib/scanCtaStyles'
 import { supabase } from '../../lib/supabase'
 import { effectiveTier, planDisplayLabel, type UserPlanFields } from '../../lib/tierLimits'
 import { SlabBookLogo } from '../SlabBookLogo'
@@ -227,12 +228,15 @@ export function DashboardLayout () {
             className={({ isActive }) =>
               [
                 item.label === 'Dashboard' ? 'hidden lg:flex' : 'flex',
-                'items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium leading-snug transition-colors',
+                'items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] leading-snug transition-colors',
                 item.label === 'Scan & price'
-                  ? 'bg-slab-teal text-zinc-950 hover:bg-slab-teal-light'
-                  : isActive
-                    ? 'bg-slab-teal/10 text-slab-teal-light'
-                    : 'text-[var(--slab-text-muted)] hover:bg-white/5 hover:text-[var(--slab-text)]',
+                  ? scanCtaNavItem
+                  : [
+                      'font-medium',
+                      isActive
+                        ? 'bg-slab-teal/10 text-slab-teal-light'
+                        : 'text-[var(--slab-text-muted)] hover:bg-white/5 hover:text-[var(--slab-text)]',
+                    ].join(' '),
               ].join(' ')
             }
           >
@@ -352,7 +356,7 @@ export function DashboardLayout () {
   )
 
   return (
-    <div className="flex min-h-dvh bg-[var(--color-surface)]">
+    <div className="flex min-h-dvh min-w-0 bg-[var(--color-surface)]">
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-40 lg:flex">{sidebar}</div>
 
@@ -374,16 +378,16 @@ export function DashboardLayout () {
         {sidebar}
       </div>
 
-      <div className="flex min-h-dvh flex-1 flex-col lg:pl-60">
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col lg:pl-60">
         {(import.meta.env.VITE_DEMO_MODE === 'true' || import.meta.env.VITE_DEMO_MODE === '1') && (
           <div
-            className="border-b border-amber-500/40 bg-amber-500/15 px-4 py-2 text-center text-xs font-medium text-amber-100"
+            className="border-b border-amber-500/40 bg-amber-500/15 px-3 py-2 text-center text-xs font-medium text-amber-100 sm:px-4"
             role="status"
           >
             Demo mode — AI disabled
           </div>
         )}
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface)]/90 px-4 backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-30 flex h-16 min-w-0 items-center gap-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface)]/90 px-3 backdrop-blur sm:px-4 lg:hidden">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
@@ -399,12 +403,15 @@ export function DashboardLayout () {
           </Link>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 min-w-0 max-w-full overflow-x-clip px-3 py-4 pb-24 sm:px-6 sm:py-6 sm:pb-6 lg:px-8 lg:py-8 lg:pb-8">
           <Outlet />
         </main>
         <Link
           to="/dashboard/collection?scan=1"
-          className="fixed bottom-6 right-5 z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-slab-teal text-zinc-950 shadow-xl shadow-black/40 transition hover:bg-slab-teal-light lg:hidden"
+          className={[
+            'fixed bottom-5 right-4 z-30 inline-flex h-16 w-16 items-center justify-center rounded-full lg:hidden',
+            scanCtaFab,
+          ].join(' ')}
           aria-label="Scan and price card"
         >
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>

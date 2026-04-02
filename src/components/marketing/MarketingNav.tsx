@@ -24,7 +24,7 @@ export function MarketingNav () {
   }, [menuOpen])
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface)]/95 px-4 py-3 backdrop-blur sm:px-6 sm:py-4 md:px-10">
+    <header className="sticky top-0 z-50 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface)]/95 px-3 py-3 backdrop-blur sm:px-6 sm:py-4 md:px-10">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
         <Link
           to="/"

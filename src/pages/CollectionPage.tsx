@@ -29,6 +29,7 @@ import {
 } from '../lib/cardImageStorage'
 import { supabase } from '../lib/supabase'
 import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
+import { scanCtaSurface } from '../lib/scanCtaStyles'
 import { fetchTotalCardCount } from '../lib/collectionCounts'
 import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
 import { getCardValue } from '../lib/pricing-service'
@@ -615,7 +616,7 @@ export function CollectionPage () {
   const filterEmpty = hasCards && visibleCards.length === 0
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-6">
       <CollectionSubnav />
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
@@ -652,7 +653,10 @@ export function CollectionPage () {
           <button
             type="button"
             onClick={() => openAdd({ scan: true })}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slab-teal px-5 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-slab-teal/25 transition hover:bg-slab-teal-light sm:w-auto"
+            className={[
+              'inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm sm:w-auto',
+              scanCtaSurface,
+            ].join(' ')}
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />
@@ -702,7 +706,10 @@ export function CollectionPage () {
           <button
             type="button"
             onClick={() => openAdd({ scan: true })}
-            className="mt-10 inline-flex items-center justify-center gap-2 rounded-xl bg-slab-teal px-10 py-4 text-lg font-semibold text-zinc-950 shadow-lg shadow-slab-teal/25 transition hover:bg-slab-teal-light"
+            className={[
+              'mt-10 inline-flex items-center justify-center gap-2 rounded-xl px-10 py-4 text-lg',
+              scanCtaSurface,
+            ].join(' ')}
           >
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />

@@ -173,8 +173,8 @@ export function PricingSection ({
   const lifetimeActive = currentEffectiveTier === 'lifetime'
 
   return (
-    <section id="pricing" className="scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20 md:px-10">
-      <div className="mx-auto max-w-6xl">
+    <section id="pricing" className="scroll-mt-24 px-3 py-16 sm:px-6 sm:py-20 md:px-10">
+      <div className="mx-auto w-full min-w-0 max-w-6xl">
         <h2 className="text-center text-3xl font-semibold tracking-tight text-[var(--slab-text)] sm:text-4xl">
           Simple pricing
         </h2>

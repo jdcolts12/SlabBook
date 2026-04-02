@@ -80,7 +80,7 @@ export function BillingSettingsPage () {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
+    <div className="mx-auto w-full min-w-0 max-w-2xl space-y-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Billing &amp; plan</h1>
         <p className="mt-1 text-sm text-zinc-400">Manage your subscription, payment method, and invoices.</p>

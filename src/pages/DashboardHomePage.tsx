@@ -10,6 +10,7 @@ import { DashboardTopPositions } from '../components/dashboard/DashboardTopPosit
 import type { ViewMode } from '../components/collection/CollectionToolbar'
 import { useAuth } from '../hooks/useAuth'
 import { AI_VALUE_DISCLAIMER } from '../lib/aiValueCopy'
+import { scanCtaSurface } from '../lib/scanCtaStyles'
 import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
 import { getCardValue } from '../lib/pricing-service'
 import {
@@ -255,7 +256,7 @@ export function DashboardHomePage () {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 pb-10">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-8 pb-10">
       {upgradeSuccess && (
         <div className="rounded-xl border border-slab-teal/35 bg-slab-teal/10 px-4 py-3 text-sm text-slab-teal-light">
           Payment successful — your plan will update in a moment. Refresh if you don&apos;t see new features yet.
@@ -274,7 +275,10 @@ export function DashboardHomePage () {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:shrink-0">
           <Link
             to="/dashboard/collection?scan=1"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slab-teal px-6 py-3.5 text-sm font-semibold text-zinc-950 shadow-lg shadow-slab-teal/20 transition hover:bg-slab-teal-light sm:w-auto"
+            className={[
+              'inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm sm:w-auto',
+              scanCtaSurface,
+            ].join(' ')}
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5A2.25 2.25 0 016 5.25h2.172c.597 0 1.17-.237 1.592-.659l.486-.486a2.25 2.25 0 011.592-.659h.316a2.25 2.25 0 011.592.659l.486.486a2.25 2.25 0 001.592.659H18A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z" />

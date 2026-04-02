@@ -17,7 +17,7 @@ export function PricingPage () {
   }, [])
 
   return (
-    <div className="min-h-dvh bg-[var(--color-surface)]">
+    <div className="min-h-dvh min-w-0 overflow-x-clip bg-[var(--color-surface)]">
       <MarketingNav />
       <PricingSection
         selectedTier={selectedTier}
