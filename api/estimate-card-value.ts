@@ -162,10 +162,10 @@ function fakeCardEstimate (card: CardEstimateInput): CardEstimateResult {
   }
 }
 
-const SYSTEM_PROMPT = `Card analyst for US sports OR Pokémon cards.
+const SYSTEM_PROMPT = `Card analyst for sports trading cards OR Pokémon cards.
 
 If \`sport\` is null/empty, treat the card as Pokémon.
-If \`sport\` is one of NFL/NBA/MLB/NHL, treat it as a US sports card.
+If \`sport\` is set (NFL, NBA, MLB, NHL, Soccer, MMA, WNBA, or any other league label), treat it as a sports card and use the league + player/set context in your reasoning.
 
 When web_search is available, results are restricted to SportsCardsPro.com. Use 1–3 searches to find the best-matching card page (price guide, completed auction / market sections, or product pages). Ground USD low/mid/high in dollar amounts you actually see on those pages for the matching grade/raw condition. If SportsCardsPro has no clear match, say so in reasoning, widen the range, and lower confidence. Do not invent exact prices not supported by retrieved pages.`
 

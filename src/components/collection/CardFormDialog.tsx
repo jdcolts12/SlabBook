@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { Card } from '../../types/card'
 import { getPlayersForSport } from '../../data/playersBySport'
-import { SETS_BY_SPORT, type Sport, SPORTS } from '../../data/sports'
+import { normalizeSportLabel, SETS_BY_SPORT, SPORTS_PRESETS } from '../../data/sports'
 import {
   type CardFormValues,
   validateCardForm,
@@ -101,11 +101,6 @@ const emptyForm: CardFormValues = {
   current_value: '',
 }
 
-function parseSport (value: string | null): Sport {
-  if (value === 'NFL' || value === 'NBA' || value === 'MLB' || value === 'NHL') return value
-  return 'NFL'
-}
-
 function normalizeDetectedKind (raw: string | undefined): DetectedCardKind {
   const t = (raw ?? '').toLowerCase().replace(/-/g, '_')
   if (t === 'pokemon_tcg' || t === 'pokemon') return 'pokemon_tcg'
@@ -117,7 +112,7 @@ function cardToForm (c: Card): CardFormValues {
   const sportsRow = Boolean(c.sport)
   return {
     detected_card_kind: sportsRow ? 'sports' : 'pokemon_tcg',
-    sport: sportsRow ? parseSport(c.sport) : 'NFL',
+    sport: sportsRow ? normalizeSportLabel(c.sport) : 'NFL',
     player_name: c.player_name,
     year: c.year != null ? String(c.year) : '',
     set_name: c.set_name ?? '',
@@ -198,6 +193,7 @@ export function CardFormDialog ({
   const [serialMode, setSerialMode] = useState(false)
   const [serialNo, setSerialNo] = useState('')
   const [serialTotal, setSerialTotal] = useState('')
+  const sportLeagueOnFocusRef = useRef('')
 
   useEffect(() => {
     if (!frontFile) {
@@ -428,7 +424,7 @@ export function CardFormDialog ({
       const detected_card_kind = normalizeDetectedKind(res.card_type)
       const nextSport =
         detected_card_kind === 'sports' && res.sport?.trim()
-          ? parseSport(res.sport)
+          ? normalizeSportLabel(res.sport)
           : form.sport
       const yDigits = res.year ? normalizeIdentifyYear(res.year) : ''
       const yearNext = yDigits.length === 4 ? yDigits : undefined
@@ -831,27 +827,40 @@ export function CardFormDialog ({
                 {isSportsCardForm ? (
                   <div>
                     <label htmlFor="sport" className="text-sm font-medium text-zinc-300">
-                      Sport <span className="text-red-400">*</span>
+                      Sport / league <span className="text-red-400">*</span>
                     </label>
-                    <select
+                    <input
                       id="sport"
+                      list="slabbook-sport-presets"
+                      required
+                      autoComplete="off"
                       value={form.sport}
+                      onFocus={() => {
+                        sportLeagueOnFocusRef.current = form.sport.trim()
+                      }}
                       onChange={(e) => {
-                        const sport = e.target.value as Sport
+                        setForm((f) => ({ ...f, sport: e.target.value }))
+                      }}
+                      onBlur={(e) => {
+                        const t = e.target.value.trim()
+                        const leagueChanged = t !== sportLeagueOnFocusRef.current
                         setForm((f) => ({
                           ...f,
-                          sport,
-                          set_name: '',
+                          sport: t || f.sport,
+                          set_name: leagueChanged ? '' : f.set_name,
                         }))
                       }}
                       className={inputCls}
-                    >
-                      {SPORTS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
+                      placeholder="NFL, Soccer, MMA, or type another league"
+                    />
+                    <datalist id="slabbook-sport-presets">
+                      {SPORTS_PRESETS.map((s) => (
+                        <option key={s} value={s} />
                       ))}
-                    </select>
+                    </datalist>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Choose a preset or type any league (e.g. WNBA, Rugby, Formula 1).
+                    </p>
                   </div>
                 ) : (
                   <div className="rounded-lg border border-zinc-700/80 bg-zinc-950/40 p-3 text-sm text-zinc-400">

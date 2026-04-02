@@ -1,10 +1,10 @@
 import type { DetectedCardKind } from './identifyCardApi'
-import type { Sport } from '../data/sports'
 
 export type CardFormValues = {
   /** From scan identify, or sports for manual add / edit. */
   detected_card_kind: DetectedCardKind
-  sport: Sport
+  /** Preset (NFL, Soccer, …) or any custom league label the user types. */
+  sport: string
   player_name: string
   year: string
   set_name: string
@@ -43,7 +43,7 @@ export function variationFromFormValues (f: CardFormValues): string | null {
 
 export function validateCardForm (f: CardFormValues): string | null {
   if (f.detected_card_kind === 'sports') {
-    if (!f.sport) return 'Select a sport.'
+    if (!f.sport.trim()) return 'Enter a sport or league.'
   }
   if (!f.player_name.trim()) {
     return f.detected_card_kind === 'sports'

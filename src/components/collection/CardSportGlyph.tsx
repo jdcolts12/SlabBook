@@ -13,7 +13,11 @@ export function CardSportGlyph ({ sport, className }: Props) {
           ? '⚾'
           : sport === 'NHL'
             ? '🏒'
-            : '🃏'
+            : sport === 'Soccer'
+              ? '⚽'
+              : sport === 'MMA'
+                ? '🥊'
+                : '🃏'
   return (
     <span className={className} aria-hidden>
       {glyph}

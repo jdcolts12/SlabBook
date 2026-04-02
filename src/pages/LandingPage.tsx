@@ -14,7 +14,7 @@ const FAQ = [
   },
   {
     q: 'What sports and cards are supported?',
-    a: 'Sports: NFL, NBA, MLB, and NHL — raw and graded (PSA, BGS, SGC, CGC). Pokémon TCG has its own collection area with English and Japanese cards and PSA/CGC-style tracking, kept separate from sports.',
+    a: 'Sports and trading cards: NFL, NBA, MLB, NHL, Soccer, MMA, and any other league you type in — raw and graded (PSA, BGS, SGC, CGC). Pokémon TCG has its own collection area with English and Japanese cards and PSA/CGC-style tracking, kept separate from sports.',
   },
   {
     q: 'Can I add photos of my cards?',
@@ -459,7 +459,7 @@ export function LandingPage () {
         {/* Social proof */}
         <section className="border-y border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]/50 px-4 py-8 sm:px-6 md:px-10">
           <p className="mx-auto max-w-md text-center text-sm font-medium leading-snug text-[var(--slab-text-muted)] sm:max-w-none">
-            NFL · NBA · MLB · NHL · Pokémon TCG — photos, binder grid, and AI in one place
+            NFL · NBA · MLB · NHL · Soccer · MMA · Pokémon TCG — photos, binder grid, and AI in one place
           </p>
           <div className="mx-auto mt-5 flex max-w-4xl flex-wrap justify-center gap-2 text-center text-sm text-[var(--slab-text)] sm:mt-6 sm:gap-x-6 sm:gap-y-2">
             {[

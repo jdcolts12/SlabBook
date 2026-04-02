@@ -1,5 +1,3 @@
-import type { Sport } from './sports'
-
 /** Curated top names per sport for autocomplete (local lists). */
 const NFL: string[] = [
   'Patrick Mahomes', 'Josh Allen', 'Lamar Jackson', 'Joe Burrow', 'Jalen Hurts',
@@ -93,14 +91,29 @@ const NHL: string[] = [
   'Brad Marchand', 'Patrice Bergeron', 'David Krejčí', 'Tuukka Rask', 'Zdeno Chára',
 ]
 
-export const PLAYERS_BY_SPORT: Record<Sport, string[]> = {
+const Soccer: string[] = [
+  'Lionel Messi', 'Cristiano Ronaldo', 'Kylian Mbappé', 'Erling Haaland', 'Kevin De Bruyne',
+  'Mohamed Salah', 'Harry Kane', 'Vinícius Júnior', 'Jude Bellingham', 'Luka Modrić',
+  'Robert Lewandowski', 'Karim Benzema', 'Neymar', 'Pedri', 'Gavi',
+  'Phil Foden', 'Bukayo Saka', 'Martin Ødegaard', 'Son Heung-min', 'Victor Osimhen',
+]
+
+const MMA: string[] = [
+  'Jon Jones', 'Islam Makhachev', 'Alexander Volkanovski', 'Leon Edwards', 'Alex Pereira',
+  'Sean Strickland', 'Dricus du Plessis', 'Ilia Topuria', 'Max Holloway', 'Charles Oliveira',
+  'Conor McGregor', 'Khabib Nurmagomedov', 'Georges St-Pierre', 'Anderson Silva', 'Fedor Emelianenko',
+]
+
+export const PLAYERS_BY_SPORT: Record<string, string[]> = {
   NFL,
   NBA,
   MLB,
   NHL,
+  Soccer,
+  MMA,
 }
 
-export function getPlayersForSport (sport: Sport): string[] {
+export function getPlayersForSport (sport: string): string[] {
   const list = PLAYERS_BY_SPORT[sport] ?? []
   return [...new Set(list)]
 }

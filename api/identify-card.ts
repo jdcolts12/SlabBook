@@ -164,18 +164,18 @@ STEP 2: Only after card_type is set, extract the rest:
 
 SPORTS extraction:
 - player_name = the athlete/player name on the card.
-- sport = one of NFL, NBA, MLB, NHL (infer from logos/uniforms/team).
+- sport = league: prefer NFL, NBA, MLB, NHL, Soccer, or MMA when clearly a match; otherwise a short label the user would recognize (e.g. WNBA, F1, Rugby, Tennis).
 
 POKEMON/OTHER extraction:
 - Put the Pokémon character / card name into "player_name" (so your JSON stays compatible with the app).
-- sport = "" (empty string) — never NFL/NBA/MLB/NHL on non-sports cards.
+- sport = "" (empty string) — never a sports league on non-sports cards.
 
 Output requirements:
 - Return ONLY valid JSON (no markdown, no explanation).
 - If uncertain, provide best estimates and set confidence to lower value.
 - Do not invent invisible details. Unknown strings: "". grading_company/grade: null when unknown.
 - card_type is required: exactly "sports" | "pokemon_tcg" | "other_tcg".
-- When card_type is "sports", sport must be one of NFL, NBA, MLB, NHL.
+- When card_type is "sports", sport must be a non-empty league label (preset or custom as above).
 - When card_type is "pokemon_tcg" or "other_tcg", set sport to "".
 
 Return ONLY this JSON object:
@@ -186,7 +186,7 @@ Return ONLY this JSON object:
   "set_name": "<string>",
   "card_number": "<string>",
   "variation": "<string>",
-  "sport": "<NFL|NBA|MLB|NHL or empty string when not sports>",
+  "sport": "<league label or empty string when not sports>",
   "grading_company": "<string or null>",
   "grade": "<string or null>",
   "is_graded": <boolean>,
@@ -222,13 +222,21 @@ function asStr (v: unknown): string | undefined {
 
 function normalizeSport (raw: string | undefined): string | undefined {
   if (!raw) return undefined
-  const u = raw.trim().toUpperCase()
+  const t = raw.trim()
+  if (!t) return undefined
+  const u = t.toUpperCase()
   if (u === 'NFL' || u === 'NBA' || u === 'MLB' || u === 'NHL') return u
-  if (u.includes('FOOTBALL')) return 'NFL'
+  if (u === 'SOCCER' || u === 'MLS' || u === 'EPL' || u === 'FIFA' || u.includes('PREMIER LEAGUE')) {
+    return 'Soccer'
+  }
+  if (u === 'MMA' || u === 'UFC' || u.includes('UFC') || u.includes('BELLATOR')) {
+    return 'MMA'
+  }
+  if (u.includes('FOOTBALL') && !u.includes('SOCCER')) return 'NFL'
   if (u.includes('BASKETBALL')) return 'NBA'
   if (u.includes('BASEBALL')) return 'MLB'
   if (u.includes('HOCKEY')) return 'NHL'
-  return undefined
+  return t
 }
 
 type IdentifyCardType = 'sports' | 'pokemon_tcg' | 'other_tcg'
