@@ -55,6 +55,44 @@ export function CardImageModal ({
   const gain = cardGainDollars(card)
   const gainPct = cardGainPercent(card)
 
+  function scpSlugify (raw: string): string {
+    return raw
+      .trim()
+      .toLowerCase()
+      .replace(/&/g, 'and')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+  }
+
+  function scpCardNumberSlug (raw: string | null | undefined): string {
+    if (!raw) return ''
+    const base = String(raw).split('/')[0] || ''
+    const cleaned = base.replace(/^[#\s]+/, '').trim()
+    return scpSlugify(cleaned)
+  }
+
+  const scpSportSlug =
+    card.sport === 'NFL'
+      ? 'football-cards'
+      : card.sport === 'NBA'
+        ? 'basketball-cards'
+        : card.sport === 'MLB'
+          ? 'baseball-cards'
+          : card.sport === 'NHL'
+            ? 'hockey-cards'
+            : ''
+
+  const scpYear = card.year != null ? String(card.year) : ''
+  const scpSetSlug = card.set_name ? scpSlugify(card.set_name) : ''
+  const scpPlayerSlug = scpSlugify(card.player_name)
+  const scpCardNumber = scpCardNumberSlug(card.card_number)
+
+  const sportsCardsProGameUrl =
+    scpSportSlug && scpYear && scpSetSlug && scpPlayerSlug && scpCardNumber
+      ? `https://www.sportscardspro.com/game/${scpSportSlug}-${scpYear}-${scpSetSlug}/${scpPlayerSlug}-${scpCardNumber}`
+      : ''
+
+  // Fallback: if we can't build the exact card URL, use a search that still leads to recent sales.
   const sportsCardsProQuery = [
     card.player_name,
     card.year != null ? String(card.year) : null,
@@ -67,10 +105,12 @@ export function CardImageModal ({
     .join(' ')
     .trim()
 
-  const sportsCardsProUrl =
+  const sportsCardsProSearchUrl =
     sportsCardsProQuery.length > 0
       ? `https://www.sportscardspro.com/search-products?q=${encodeURIComponent(sportsCardsProQuery)}&type=prices`
       : ''
+
+  const sportsCardsProUrl = sportsCardsProGameUrl || sportsCardsProSearchUrl
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-8">
@@ -209,7 +249,7 @@ export function CardImageModal ({
                   rel="noreferrer"
                   className="ml-4 mt-3 inline-block text-xs font-medium text-slab-teal hover:text-slab-teal-light"
                 >
-                  SportsCardsPro recent sales
+                  SportsCardsPro card
                 </a>
               )}
             </div>
