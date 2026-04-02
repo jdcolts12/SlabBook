@@ -5,6 +5,7 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { AIInsightsPage } from './pages/AIInsightsPage'
 import { CollectionPage } from './pages/CollectionPage'
 import { CombinedCollectionPage } from './pages/CombinedCollectionPage'
+import { WatchlistPage } from './pages/WatchlistPage'
 import { PokemonCollectionPage } from './pages/PokemonCollectionPage'
 import { DashboardHomePage } from './pages/DashboardHomePage'
 import { MarketValuesPage } from './pages/MarketValuesPage'
@@ -40,6 +41,7 @@ function App () {
             <Route path="collection" element={<CollectionPage />} />
             <Route path="collection/pokemon" element={<PokemonCollectionPage />} />
             <Route path="collection/all" element={<CombinedCollectionPage />} />
+            <Route path="collection/watchlist" element={<WatchlistPage />} />
             <Route path="market-values" element={<MarketValuesPage />} />
             <Route path="insights" element={<AIInsightsPage />} />
             <Route path="settings/billing" element={<BillingSettingsPage />} />

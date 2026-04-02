@@ -825,6 +825,7 @@ export function CollectionPage () {
         onSubmit={handleSubmit}
         isFreeUser={isFreeUser}
         onUpgradeRequest={() => setUpgradeOpen(true)}
+        onWatchlistSaved={() => setToastMessage('Saved to watchlist.')}
       />
 
       <CardImageModal

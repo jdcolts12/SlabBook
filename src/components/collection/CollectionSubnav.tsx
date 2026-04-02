@@ -4,6 +4,7 @@ const tabs = [
   { to: '/dashboard/collection', label: 'Sports', end: true as boolean },
   { to: '/dashboard/collection/pokemon', label: 'Pokémon TCG', end: false },
   { to: '/dashboard/collection/all', label: 'All cards', end: false },
+  { to: '/dashboard/collection/watchlist', label: 'Watchlist', end: false },
 ] as const
 
 export function CollectionSubnav () {

@@ -16,6 +16,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import type { EstimateCardValueResponse } from '../../lib/estimateCardValueApi'
 import { postInstantEstimateCardValue } from '../../lib/instantEstimateApi'
+import { formValuesToWatchlistInsert } from '../../lib/watchlistPayload'
 import { CardPhotoDropzone } from './CardPhotoDropzone'
 
 export type CardFormSubmitPayload = {
@@ -38,6 +39,7 @@ type CardFormDialogProps = {
   onSubmit: (payload: CardFormSubmitPayload) => Promise<void>
   isFreeUser?: boolean
   onUpgradeRequest?: () => void
+  onWatchlistSaved?: () => void
 }
 
 const VARIATION_PRESETS = [
@@ -167,6 +169,7 @@ export function CardFormDialog ({
   onSubmit,
   isFreeUser = false,
   onUpgradeRequest,
+  onWatchlistSaved,
 }: CardFormDialogProps) {
   const [form, setForm] = useState<CardFormValues>(emptyForm)
   const [error, setError] = useState<string | null>(null)
@@ -181,6 +184,10 @@ export function CardFormDialog ({
   const [removeBack, setRemoveBack] = useState(false)
   const [identifyBanner, setIdentifyBanner] = useState<string | null>(null)
   const [identifying, setIdentifying] = useState(false)
+  const [addConfirmOpen, setAddConfirmOpen] = useState(false)
+  const [pendingSubmit, setPendingSubmit] = useState<CardFormSubmitPayload | null>(null)
+  const [watchlistSaving, setWatchlistSaving] = useState(false)
+  const [watchlistError, setWatchlistError] = useState<string | null>(null)
   /** In scan add mode, hide sport/player/etc. until AI identifies or user chooses manual entry. */
   const [scanDetailsRevealed, setScanDetailsRevealed] = useState(false)
   const [verifyLowConfidence, setVerifyLowConfidence] = useState(false)
@@ -230,11 +237,15 @@ export function CardFormDialog ({
       setForm(emptyForm)
       setPlayerInput('')
       setScanDetailsRevealed(!scanMode)
+      setAddConfirmOpen(false)
+      setPendingSubmit(null)
+      setWatchlistError(null)
     } else if (initial) {
       const next = cardToForm(initial)
       setForm(next)
       setPlayerInput(next.player_name)
       setScanDetailsRevealed(true)
+      setWatchlistError(null)
     }
   }, [open, mode, initial, scanMode])
 
@@ -498,7 +509,8 @@ export function CardFormDialog ({
           merged.current_value = String(est.current_value)
         }
       }
-      await onSubmit({
+      setForm(merged)
+      setPendingSubmit({
         values: merged,
         draftCardId,
         imageFront: frontFile,
@@ -506,12 +518,59 @@ export function CardFormDialog ({
         removeImageFront: removeFront,
         removeImageBack: removeBack,
       })
-      onClose()
+      setWatchlistError(null)
+      setAddConfirmOpen(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setIdentifyBanner(null)
     } finally {
       setSaving(false)
+      setIdentifyBanner(null)
+    }
+  }
+
+  async function commitPendingAdd () {
+    if (!pendingSubmit) return
+    setSaving(true)
+    setAddConfirmOpen(false)
+    try {
+      await onSubmit(pendingSubmit)
+      setPendingSubmit(null)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      setWatchlistError(null)
+      setAddConfirmOpen(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function dismissAddConfirm () {
+    setAddConfirmOpen(false)
+    setPendingSubmit(null)
+    setWatchlistError(null)
+  }
+
+  async function commitPendingToWatchlist () {
+    if (!pendingSubmit) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setWatchlistError('Sign in to save to your watchlist.')
+      return
+    }
+    setWatchlistSaving(true)
+    setWatchlistError(null)
+    try {
+      const row = formValuesToWatchlistInsert(user.id, pendingSubmit.values)
+      const { error: insErr } = await supabase.from('watchlist_items').insert(row)
+      if (insErr) throw new Error(insErr.message)
+      onWatchlistSaved?.()
+      dismissAddConfirm()
+    } catch (err) {
+      setWatchlistError(err instanceof Error ? err.message : 'Could not save to watchlist.')
+    } finally {
+      setWatchlistSaving(false)
     }
   }
 
@@ -524,6 +583,21 @@ export function CardFormDialog ({
       return
     }
     const id = mode === 'edit' && initial ? initial.id : draftCardId
+
+    if (scanMode && mode === 'add') {
+      setPendingSubmit({
+        values: form,
+        draftCardId: id,
+        imageFront: frontFile,
+        imageBack: backFile,
+        removeImageFront: removeFront,
+        removeImageBack: removeBack,
+      })
+      setWatchlistError(null)
+      setAddConfirmOpen(true)
+      return
+    }
+
     setSaving(true)
     try {
       await onSubmit({
@@ -544,6 +618,15 @@ export function CardFormDialog ({
 
   if (!open) return null
 
+  const pendingLabel =
+    pendingSubmit?.values.player_name.trim() ||
+    (pendingSubmit?.values.detected_card_kind === 'pokemon_tcg' ? 'This Pokémon card' : 'This card')
+  const pendingEst =
+    pendingSubmit?.values.current_value.trim() && !isFreeUser
+      ? Number.parseFloat(pendingSubmit.values.current_value.replace(/,/g, ''))
+      : null
+  const pendingEstOk = pendingEst != null && Number.isFinite(pendingEst)
+
   const companyUnknown =
     Boolean(form.grading_company) &&
     !(GRADING_COMPANIES as readonly string[]).includes(form.grading_company)
@@ -551,6 +634,7 @@ export function CardFormDialog ({
     Boolean(form.grade) && !(GRADE_OPTIONS as readonly string[]).includes(form.grade)
 
   return (
+    <>
     <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4">
       <button
         type="button"
@@ -1155,7 +1239,7 @@ export function CardFormDialog ({
                       : 'Saving…'
                     : mode === 'add'
                       ? scanMode
-                        ? 'Save without waiting for estimate'
+                        ? 'Add to collection…'
                         : 'Add card'
                       : 'Save changes'}
                 </button>
@@ -1310,5 +1394,67 @@ export function CardFormDialog ({
         </div>
       </div>
     </div>
+
+    {addConfirmOpen && pendingSubmit && (
+      <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <button
+          type="button"
+          className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+          aria-label="Close confirmation"
+          onClick={dismissAddConfirm}
+        />
+        <div
+          role="alertdialog"
+          aria-modal
+          aria-labelledby="add-confirm-title"
+          className="relative z-10 w-full max-w-md rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-6 shadow-2xl"
+        >
+          <h3 id="add-confirm-title" className="text-lg font-semibold text-white">
+            Scan complete
+          </h3>
+          <p className="mt-2 text-sm text-zinc-400">
+            {pendingLabel}
+            {pendingSubmit.values.set_name.trim() ? ` · ${pendingSubmit.values.set_name.trim()}` : ''}
+          </p>
+          {pendingEstOk && (
+            <p className="mt-2 text-sm font-medium text-slab-teal-light">
+              Est. value ${Math.round(pendingEst!).toLocaleString('en-US')}
+            </p>
+          )}
+          {watchlistError && (
+            <p className="mt-3 text-sm text-red-400" role="alert">
+              {watchlistError}
+            </p>
+          )}
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+            <button
+              type="button"
+              onClick={() => void commitPendingAdd()}
+              disabled={saving || watchlistSaving}
+              className="rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light disabled:opacity-50 sm:order-1"
+            >
+              {saving ? 'Adding…' : 'Add to collection'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void commitPendingToWatchlist()}
+              disabled={saving || watchlistSaving}
+              className="rounded-lg border border-zinc-600 px-4 py-2.5 text-sm font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-50 sm:order-2"
+            >
+              {watchlistSaving ? 'Saving…' : 'Add to watchlist'}
+            </button>
+            <button
+              type="button"
+              onClick={dismissAddConfirm}
+              disabled={saving || watchlistSaving}
+              className="rounded-lg px-4 py-2.5 text-sm font-medium text-zinc-400 hover:bg-white/5 hover:text-zinc-200 disabled:opacity-50 sm:order-3"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
