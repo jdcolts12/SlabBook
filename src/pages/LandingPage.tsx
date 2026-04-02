@@ -400,55 +400,62 @@ export function LandingPage () {
       <main>
         {/* Hero */}
         <section className="relative px-4 pb-16 pt-8 sm:px-6 sm:pb-20 sm:pt-10 md:px-10 lg:pt-16">
-          <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center lg:gap-14">
-            <div className="order-1 lg:order-2">
+          <div className="mx-auto flex max-w-6xl flex-col gap-8 lg:grid lg:grid-cols-2 lg:items-center lg:gap-14">
+            <h1 className="text-[1.65rem] font-semibold leading-[1.15] tracking-tight text-[var(--slab-text)] min-[400px]:text-3xl sm:text-4xl sm:leading-tight md:text-5xl lg:col-start-1 lg:row-start-1">
+              Your Card Collection. Tracked. Valued. Intelligent.
+            </h1>
+
+            <Link
+              to={user ? '/dashboard/collection?scan=1' : '/signup'}
+              className="inline-flex min-h-[48px] w-full max-w-md items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-semibold text-[var(--slab-text)] transition hover:border-slab-teal/40 lg:hidden"
+            >
+              Scan &amp; price
+            </Link>
+
+            <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
               <HeroCollectionSlideshow />
             </div>
-            <div className="order-2 min-w-0 lg:order-1">
-              <h1 className="text-[1.65rem] font-semibold leading-[1.15] tracking-tight text-[var(--slab-text)] min-[400px]:text-3xl sm:text-4xl sm:leading-tight md:text-5xl">
-                Your Card Collection. Tracked. Valued. Intelligent.
-              </h1>
-              <div className="mt-7 flex w-full max-w-md flex-col gap-3 sm:mt-8 sm:max-w-none sm:flex-row sm:flex-wrap">
-                {user ? (
-                  <>
-                    <Link
-                      to="/dashboard/collection"
-                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-slab-teal px-6 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light sm:w-auto sm:min-w-[11rem] sm:px-8"
-                    >
-                      Go to app
-                    </Link>
-                    <Link
-                      to="/dashboard/collection?scan=1"
-                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40 sm:w-auto sm:min-w-[11rem] sm:px-8"
-                    >
-                      Scan & price
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={scrollToHow}
-                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-transparent px-4 py-3 text-base font-medium text-[var(--slab-text-muted)] underline-offset-4 transition hover:text-[var(--slab-text)] hover:underline sm:w-auto sm:min-h-0 sm:px-4"
-                    >
-                      How it works
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <Link
-                      to="/signup"
-                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-slab-teal px-6 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light sm:w-auto sm:min-w-[12rem] sm:px-8"
-                    >
-                      Start Free
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={scrollToHow}
-                      className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40 sm:w-auto sm:min-w-[12rem] sm:px-8"
-                    >
-                      See How It Works
-                    </button>
-                  </>
-                )}
-              </div>
+
+            <div className="flex w-full max-w-md flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap lg:col-start-1 lg:row-start-2 lg:mt-0 lg:max-w-none">
+              {user ? (
+                <>
+                  <Link
+                    to="/dashboard/collection"
+                    className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-slab-teal px-6 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light sm:w-auto sm:min-w-[11rem] sm:px-8"
+                  >
+                    Go to app
+                  </Link>
+                  <Link
+                    to="/dashboard/collection?scan=1"
+                    className="hidden min-h-[48px] w-full items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40 sm:w-auto sm:min-w-[11rem] sm:px-8 lg:inline-flex"
+                  >
+                    Scan & price
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={scrollToHow}
+                    className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-transparent px-4 py-3 text-base font-medium text-[var(--slab-text-muted)] underline-offset-4 transition hover:text-[var(--slab-text)] hover:underline sm:w-auto sm:min-h-0 sm:px-4"
+                  >
+                    How it works
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/signup"
+                    className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-slab-teal px-6 py-3.5 text-base font-semibold text-zinc-950 shadow-lg shadow-slab-teal/15 transition hover:bg-slab-teal-light sm:w-auto sm:min-w-[12rem] sm:px-8"
+                  >
+                    Start Free
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={scrollToHow}
+                    className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-3.5 text-base font-medium text-[var(--slab-text)] transition hover:border-slab-teal/40 sm:w-auto sm:min-w-[12rem] sm:px-8"
+                  >
+                    See How It Works
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </section>
