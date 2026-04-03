@@ -36,6 +36,9 @@ function friendlyNonJsonError (raw: string, status: number): string {
   return `Identify failed (HTTP ${status})`
 }
 
+/**
+ * Stateless scan: each request sends only this image + server system prompt (no chat history).
+ */
 export async function identifyCardFromImage (
   imageBase64: string,
   mediaType: 'image/jpeg' | 'image/png' | 'image/webp',

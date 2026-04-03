@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import sharp from 'sharp'
 
 /** Inlined from server/* — Vercel does not reliably bundle ../server into this Lambda. */
 const DEFAULT_CLAUDE_CAP = 50
@@ -146,7 +147,8 @@ type AnthropicMessageResponse = {
   error?: { message?: string }
 }
 
-const IDENTIFY_PROMPT = `Before anything else, determine card category from the photo:
+/** Long static instructions — sent as system content with prompt caching (see Anthropic prompt caching docs). */
+const IDENTIFY_SYSTEM_PROMPT = `Before anything else, determine card category from the photo:
 
 A) SPORTS card ("sports"): real human athlete photo, team logo/jersey/stadium, Panini/Topps/Upper Deck/Bowman branding, PSA/BGS slab with player name, position listed, statistics on the back.
 B) POKEMON card ("pokemon_tcg"): Pokémon creature illustration (not a human), Pokémon logo, HP number, attack moves with damage numbers, weakness/resistance/retreat section, set symbol, card number like "4/102" or "025/198", energy icons, Basic/Stage 1/Stage 2/EX/GX/V markers.
@@ -193,6 +195,50 @@ Return ONLY this JSON object:
   "confidence": "<high|medium|low>",
   "notes": "<slab details, ambiguity>"
 }`
+
+/** Short per-request user text only; full rules live in cached system prompt. */
+const IDENTIFY_USER_MESSAGE =
+  'Analyze this single card photo now. Return only the JSON object specified in your instructions — no markdown, no extra text.'
+
+const IDENTIFY_IMAGE_MAX_EDGE = 1000
+
+/**
+ * Ensures longest side ≤ IDENTIFY_IMAGE_MAX_EDGE before Anthropic vision pricing.
+ * Re-encodes to JPEG when downscaling; passes through originals that are already small enough.
+ */
+async function resizeIdentifyImageBase64 (
+  base64: string,
+  mediaType: string,
+): Promise<{ base64: string; media_type: 'image/jpeg' | 'image/png' | 'image/webp' }> {
+  const buf = Buffer.from(base64, 'base64')
+  try {
+    const meta = await sharp(buf).metadata()
+    const w = meta.width ?? 0
+    const h = meta.height ?? 0
+    const longEdge = Math.max(w, h)
+    if (longEdge > 0 && longEdge <= IDENTIFY_IMAGE_MAX_EDGE) {
+      return {
+        base64,
+        media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/webp',
+      }
+    }
+    const out = await sharp(buf)
+      .rotate()
+      .resize(IDENTIFY_IMAGE_MAX_EDGE, IDENTIFY_IMAGE_MAX_EDGE, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 88 })
+      .toBuffer()
+    return { base64: out.toString('base64'), media_type: 'image/jpeg' }
+  } catch (e) {
+    console.warn('[identify-card] sharp resize failed; sending original image', e)
+    return {
+      base64,
+      media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/webp',
+    }
+  }
+}
 
 function getBearerToken (authHeader?: string): string | null {
   if (!authHeader) return null
@@ -372,16 +418,30 @@ async function handleIdentifyCard (req: ApiRequest, res: ApiResponse) {
     return res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY.' })
   }
 
+  const resized = await resizeIdentifyImageBase64(b64, mediaType)
+
+  /** One-shot vision request: cached system + single user message (image + short text). No chat history. */
+  const anthropicBeta =
+    process.env.IDENTIFY_ANTHROPIC_BETA?.trim() || 'prompt-caching-2024-07-31'
+
   const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
+      ...(anthropicBeta ? { 'anthropic-beta': anthropicBeta } : {}),
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
+      system: [
+        {
+          type: 'text',
+          text: IDENTIFY_SYSTEM_PROMPT,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages: [
         {
           role: 'user',
@@ -390,11 +450,11 @@ async function handleIdentifyCard (req: ApiRequest, res: ApiResponse) {
               type: 'image',
               source: {
                 type: 'base64',
-                media_type: mediaType,
-                data: b64,
+                media_type: resized.media_type,
+                data: resized.base64,
               },
             },
-            { type: 'text', text: IDENTIFY_PROMPT },
+            { type: 'text', text: IDENTIFY_USER_MESSAGE },
           ],
         },
       ],

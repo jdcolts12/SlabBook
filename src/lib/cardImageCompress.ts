@@ -1,9 +1,10 @@
 /**
  * Downscale and JPEG-encode for vision API calls (keeps request size within typical serverless limits).
+ * Default longest edge 1000px matches `/api/identify-card` server resize cap for Anthropic cost control.
  */
 export async function compressImageForVision (
   file: File,
-  maxEdge = 1280,
+  maxEdge = 1000,
   quality = 0.82,
 ): Promise<{ base64: string; media_type: 'image/jpeg' }> {
   const bitmap = await createImageBitmap(file)
