@@ -30,7 +30,20 @@ function parseOptionalNumber (raw: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-type PokemonWritable = Omit<PokemonCard, 'id' | 'created_at' | 'image_front_url' | 'image_back_url'>
+type PokemonWritable = Omit<
+  PokemonCard,
+  | 'id'
+  | 'created_at'
+  | 'image_front_url'
+  | 'image_back_url'
+  | 'value_low'
+  | 'value_high'
+  | 'confidence'
+  | 'trend'
+  | 'value_note'
+  | 'pricing_source'
+  | 'last_updated'
+>
 
 function formToPayload (userId: string, v: PokemonFormSubmitPayload['values']): PokemonWritable {
   return {

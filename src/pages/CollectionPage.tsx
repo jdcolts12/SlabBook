@@ -88,7 +88,17 @@ function formValuesToPayload (userId: string, v: CardFormValues): CardWritable {
 
 type PokemonWritable = Omit<
   PokemonCard,
-  'id' | 'created_at' | 'image_front_url' | 'image_back_url'
+  | 'id'
+  | 'created_at'
+  | 'image_front_url'
+  | 'image_back_url'
+  | 'value_low'
+  | 'value_high'
+  | 'confidence'
+  | 'trend'
+  | 'value_note'
+  | 'pricing_source'
+  | 'last_updated'
 >
 
 function pokemonValuesToPayload (userId: string, v: CardFormValues): PokemonWritable {

@@ -66,6 +66,71 @@ export function computePortfolioMetrics (cards: Card[]): PortfolioMetrics {
   }
 }
 
+export function pokemonGainDollars (c: PokemonCard): number | null {
+  const v = c.current_value != null ? Number(c.current_value) : null
+  const p = c.purchase_price != null ? Number(c.purchase_price) : null
+  if (v == null || p == null) return null
+  return v - p
+}
+
+export function pokemonGainPercent (c: PokemonCard): number | null {
+  const p = c.purchase_price != null ? Number(c.purchase_price) : null
+  if (p == null || p <= 0) return null
+  const v = c.current_value != null ? Number(c.current_value) : null
+  if (v == null) return null
+  return ((v - p) / p) * 100
+}
+
+export type PokemonPortfolioMetrics = {
+  totalValue: number
+  totalValueLow: number
+  totalValueHigh: number
+  totalInvested: number
+  gainLossDollars: number
+  gainLossPercent: number | null
+  count: number
+  bestPerformer: { card: PokemonCard; gainPercent: number } | null
+}
+
+export function computePokemonPortfolioMetrics (cards: PokemonCard[]): PokemonPortfolioMetrics {
+  let totalValue = 0
+  let totalValueLow = 0
+  let totalValueHigh = 0
+  let totalInvested = 0
+
+  for (const c of cards) {
+    const mid = Number(c.current_value ?? 0)
+    const low = c.value_low != null ? Number(c.value_low) : mid
+    const high = c.value_high != null ? Number(c.value_high) : mid
+    totalValue += mid
+    totalValueLow += low
+    totalValueHigh += high
+    totalInvested += Number(c.purchase_price ?? 0)
+  }
+
+  const gainLossDollars = totalValue - totalInvested
+  const gainLossPercent =
+    totalInvested > 0 ? (gainLossDollars / totalInvested) * 100 : null
+
+  let best: { card: PokemonCard; gainPercent: number } | null = null
+  for (const c of cards) {
+    const g = pokemonGainPercent(c)
+    if (g == null) continue
+    if (!best || g > best.gainPercent) best = { card: c, gainPercent: g }
+  }
+
+  return {
+    totalValue,
+    totalValueLow,
+    totalValueHigh,
+    totalInvested,
+    gainLossDollars,
+    gainLossPercent,
+    count: cards.length,
+    bestPerformer: best,
+  }
+}
+
 export function sumPokemonFinancials (pokemon: PokemonCard[]): {
   totalValue: number
   totalInvested: number

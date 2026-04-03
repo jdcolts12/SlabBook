@@ -137,6 +137,8 @@ type CardEstimateInput = {
   grade_display: string | null
   grading_company: string | null
   condition: string | null
+  /** Pokémon print language (e.g. EN / JP) when sport is null */
+  language?: string | null
 }
 
 type CardEstimateResult = {
@@ -243,8 +245,12 @@ function buildUserPrompt (card: CardEstimateInput): string {
     : 'N/A (raw)'
 
   const cardTypeLine = card.sport ? 'US Sports card' : 'Pokémon card'
+  const langBit =
+    !card.sport && card.language?.trim()
+      ? ` | Lang ${card.language.trim()}`
+      : ''
   return `Estimate market USD value:
-Player ${card.player_name} | Yr ${card.year ?? '?'} | Set ${card.set_name ?? '?'} | #${card.card_number ?? '—'} | Var ${card.variation ?? '—'} | Sport ${card.sport ?? '?'}
+Player ${card.player_name}${langBit} | Yr ${card.year ?? '?'} | Set ${card.set_name ?? '?'} | #${card.card_number ?? '—'} | Var ${card.variation ?? '—'} | Sport ${card.sport ?? '?'}
 Card type: ${cardTypeLine}
 Graded ${card.is_graded} | Slab ${gradeLine} | Raw cond ${card.condition ?? '—'}
 If web_search: 1–3 SportsCardsPro-focused queries (player, year, set, card #, grade), then submit_card_estimate once. No clear SCP match → wider range, low confidence.`
@@ -934,6 +940,52 @@ type CardRow = {
   current_value: number | null
   last_updated: string | null
   pricing_source: string | null
+  value_low?: number | null
+  value_high?: number | null
+  confidence?: string | null
+  trend?: string | null
+  value_note?: string | null
+}
+
+type PokemonCardRow = {
+  id: string
+  user_id: string
+  pokemon_name: string
+  language: string
+  set_name: string | null
+  card_number: string | null
+  variation: string | null
+  is_graded: boolean
+  grade: string | null
+  grading_company: string | null
+  condition: string | null
+  current_value: number | null
+  last_updated: string | null
+  pricing_source: string | null
+  value_low?: number | null
+  value_high?: number | null
+  confidence?: string | null
+  trend?: string | null
+  value_note?: string | null
+}
+
+function rowEstimateCacheFresh (row: {
+  current_value: number | null
+  last_updated: string | null
+  pricing_source: string | null
+}): boolean {
+  const lastAt = row.last_updated ? new Date(row.last_updated).getTime() : 0
+  const freshSource =
+    row.pricing_source === 'claude_estimate' ||
+    row.pricing_source === 'sportscardspro_web' ||
+    row.pricing_source === 'sportscardspro' ||
+    row.pricing_source === 'demo_mode'
+  return (
+    Number.isFinite(lastAt) &&
+    Date.now() - lastAt < CACHE_MS &&
+    freshSource &&
+    row.current_value != null
+  )
 }
 
 /** Use Express-style .json() — matches other api/* routes and @vercel/node expectations. */
@@ -989,8 +1041,11 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
     const cardId = typeof json.card_id === 'string' ? json.card_id : ''
     const forceRefresh = json.force_refresh === true
     const instantMode = json.instant === true
+    const cardKindRaw = typeof json.card_kind === 'string' ? json.card_kind.trim().toLowerCase() : ''
+    const cardKindPokemon = cardKindRaw === 'pokemon'
 
-    let card: CardRow | null = null
+    let sportsCard: CardRow | null = null
+    let pokemonRow: PokemonCardRow | null = null
     let estimateInput: CardEstimateInput | null = null
 
     if (!cardId) {
@@ -1045,6 +1100,56 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
         grading_company,
         condition,
       }
+    } else if (cardKindPokemon) {
+      const { data: row, error: fetchErr } = await admin
+        .from('pokemon_cards')
+        .select('*')
+        .eq('id', cardId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (fetchErr || !row) {
+        return jsonError(res, 404, 'Card not found.')
+      }
+
+      pokemonRow = row as PokemonCardRow
+
+      if (rowEstimateCacheFresh(pokemonRow) && !forceRefresh) {
+        return jsonOk(res, 200, {
+          cached: true,
+          current_value: pokemonRow.current_value,
+          value_low: pokemonRow.value_low ?? null,
+          value_high: pokemonRow.value_high ?? null,
+          confidence: pokemonRow.confidence ?? null,
+          trend: pokemonRow.trend ?? null,
+          value_note: pokemonRow.value_note ?? null,
+          pricing_source: pokemonRow.pricing_source,
+          last_updated: pokemonRow.last_updated,
+        })
+      }
+
+      const gradeDisplay =
+        pokemonRow.is_graded
+          ? [pokemonRow.grading_company?.trim(), pokemonRow.grade?.trim()].filter(Boolean).join(' ') ||
+            null
+          : null
+
+      const langLabel = pokemonRow.language === 'jp' ? 'JP' : 'EN'
+
+      estimateInput = {
+        player_name: pokemonRow.pokemon_name,
+        year: null,
+        set_name: pokemonRow.set_name,
+        card_number: pokemonRow.card_number,
+        variation: pokemonRow.variation,
+        sport: null,
+        is_graded: pokemonRow.is_graded,
+        grade: parseGradeNumber(pokemonRow.grade),
+        grade_display: gradeDisplay,
+        grading_company: pokemonRow.grading_company,
+        condition: pokemonRow.condition,
+        language: langLabel,
+      }
     } else {
       const { data: row, error: fetchErr } = await admin
         .from('cards')
@@ -1057,50 +1162,40 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
         return jsonError(res, 404, 'Card not found.')
       }
 
-      card = row as CardRow
-      const lastAt = card.last_updated ? new Date(card.last_updated).getTime() : 0
-      const freshSource =
-        card.pricing_source === 'claude_estimate' ||
-        card.pricing_source === 'sportscardspro_web' ||
-        card.pricing_source === 'sportscardspro' ||
-        card.pricing_source === 'demo_mode'
-      const fresh =
-        Number.isFinite(lastAt) &&
-        Date.now() - lastAt < CACHE_MS &&
-        freshSource &&
-        card.current_value != null
+      sportsCard = row as CardRow
 
-      if (fresh && !forceRefresh) {
+      if (rowEstimateCacheFresh(sportsCard) && !forceRefresh) {
         return jsonOk(res, 200, {
           cached: true,
-          current_value: card.current_value,
-          value_low: (row as { value_low?: number | null }).value_low ?? null,
-          value_high: (row as { value_high?: number | null }).value_high ?? null,
-          confidence: (row as { confidence?: string | null }).confidence ?? null,
-          trend: (row as { trend?: string | null }).trend ?? null,
-          value_note: (row as { value_note?: string | null }).value_note ?? null,
-          pricing_source: card.pricing_source,
-          last_updated: card.last_updated,
+          current_value: sportsCard.current_value,
+          value_low: sportsCard.value_low ?? null,
+          value_high: sportsCard.value_high ?? null,
+          confidence: sportsCard.confidence ?? null,
+          trend: sportsCard.trend ?? null,
+          value_note: sportsCard.value_note ?? null,
+          pricing_source: sportsCard.pricing_source,
+          last_updated: sportsCard.last_updated,
         })
       }
 
       const gradeDisplay =
-        card.is_graded
-          ? [card.grading_company?.trim(), card.grade?.trim()].filter(Boolean).join(' ') || null
+        sportsCard.is_graded
+          ? [sportsCard.grading_company?.trim(), sportsCard.grade?.trim()].filter(Boolean).join(' ') ||
+            null
           : null
 
       estimateInput = {
-        player_name: card.player_name,
-        year: card.year,
-        set_name: card.set_name,
-        card_number: card.card_number,
-        variation: card.variation,
-        sport: card.sport,
-        is_graded: card.is_graded,
-        grade: parseGradeNumber(card.grade),
+        player_name: sportsCard.player_name,
+        year: sportsCard.year,
+        set_name: sportsCard.set_name,
+        card_number: sportsCard.card_number,
+        variation: sportsCard.variation,
+        sport: sportsCard.sport,
+        is_graded: sportsCard.is_graded,
+        grade: parseGradeNumber(sportsCard.grade),
         grade_display: gradeDisplay,
-        grading_company: card.grading_company,
-        condition: card.condition,
+        grading_company: sportsCard.grading_company,
+        condition: sportsCard.condition,
       }
     }
 
@@ -1136,15 +1231,36 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
         pricing_source: 'demo_mode',
         last_updated: nowIso,
       }
-      if (!card) {
+      if (pokemonRow) {
+        const { error: upErr } = await admin
+          .from('pokemon_cards')
+          .update(updatePayload)
+          .eq('id', pokemonRow.id)
+        if (upErr) {
+          return jsonError(res, 500, upErr.message)
+        }
+        return jsonOk(res, 200, {
+          cached: false,
+          current_value: estimate.mid,
+          value_low: estimate.low,
+          value_high: estimate.high,
+          confidence: estimate.confidence,
+          trend: estimate.trend,
+          value_note: estimate.reasoning,
+          pricing_source: 'demo_mode',
+          last_updated: nowIso,
+          data_source: estimate.data_source,
+        })
+      }
+      if (!sportsCard) {
         return jsonError(res, 500, 'Missing card for demo update.')
       }
-      const { error: upErr } = await admin.from('cards').update(updatePayload).eq('id', card.id)
+      const { error: upErr } = await admin.from('cards').update(updatePayload).eq('id', sportsCard.id)
       if (upErr) {
         return jsonError(res, 500, upErr.message)
       }
       const { error: histErr } = await admin.from('price_history').insert({
-        card_id: card.id,
+        card_id: sportsCard.id,
         recorded_value: estimate.mid,
         recorded_at: nowIso,
         source: estimate.data_source || 'demo_mode',
@@ -1256,18 +1372,42 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       last_updated: nowIso,
     }
 
-    if (!card) {
+    if (pokemonRow) {
+      const { error: upErr } = await admin
+        .from('pokemon_cards')
+        .update(updatePayload)
+        .eq('id', pokemonRow.id)
+
+      if (upErr) {
+        return jsonError(res, 500, upErr.message)
+      }
+
+      return jsonOk(res, 200, {
+        cached: false,
+        current_value: estimate.mid,
+        value_low: estimate.low,
+        value_high: estimate.high,
+        confidence: estimate.confidence,
+        trend: estimate.trend,
+        value_note: estimate.reasoning,
+        pricing_source: pricingSource,
+        last_updated: nowIso,
+        data_source: estimate.data_source,
+      })
+    }
+
+    if (!sportsCard) {
       return jsonError(res, 500, 'Missing card for estimate update.')
     }
 
-    const { error: upErr } = await admin.from('cards').update(updatePayload).eq('id', card.id)
+    const { error: upErr } = await admin.from('cards').update(updatePayload).eq('id', sportsCard.id)
 
     if (upErr) {
       return jsonError(res, 500, upErr.message)
     }
 
     const { error: histErr } = await admin.from('price_history').insert({
-      card_id: card.id,
+      card_id: sportsCard.id,
       recorded_value: estimate.mid,
       recorded_at: nowIso,
       source: estimate.data_source || pricingSource,

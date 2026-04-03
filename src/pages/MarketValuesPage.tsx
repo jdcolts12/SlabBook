@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { CardImageModal } from '../components/collection/CardImageModal'
-import { SportsCardCompLinks } from '../components/collection/CardCompLinks'
+import { PokemonImageModal } from '../components/collection/PokemonImageModal'
+import { PokemonCardCompLinks, SportsCardCompLinks } from '../components/collection/CardCompLinks'
 import { CardThumbnail } from '../components/collection/CardThumbnail'
 import { MessageCircle, RefreshCw } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
@@ -10,11 +11,15 @@ import { MARKET_VALUES_BANNER } from '../lib/aiValueCopy'
 import {
   cardGainDollars,
   cardGainPercent,
+  computePokemonPortfolioMetrics,
   computePortfolioMetrics,
   formatGradeLine,
+  formatPokemonGradeLine,
+  pokemonGainDollars,
+  pokemonGainPercent,
 } from '../lib/cardMetrics'
-import { mergeEstimateIntoCard } from '../lib/estimateCardValueApi'
-import { getCardValue } from '../lib/pricing-service'
+import { mergeEstimateIntoCard, mergeEstimateIntoPokemonCard } from '../lib/estimateCardValueApi'
+import { getCardValue, getPokemonCardValue } from '../lib/pricing-service'
 import { moneyFormatter, pctFormatter } from '../lib/formatters'
 import { isEstimateStale } from '../lib/pricingConstants'
 import { formatRelativeTime } from '../lib/relativeTime'
@@ -23,6 +28,9 @@ import { createCheckoutSession } from '../lib/stripeApi'
 import { supabase } from '../lib/supabase'
 import { canUseMarketValuesTab } from '../lib/tierLimits'
 import type { Card } from '../types/card'
+import type { PokemonCard } from '../types/pokemonCard'
+
+type MarketTab = 'sports' | 'pokemon'
 
 const money = moneyFormatter
 const pct = pctFormatter
@@ -134,6 +142,71 @@ function sortCardsMarket (
   return next
 }
 
+function sortPokemonMarket (
+  list: PokemonCard[],
+  key: SortKey,
+  dir: SortDir,
+): PokemonCard[] {
+  const next = [...list]
+  const nullsLast = true
+  next.sort((a, b) => {
+    switch (key) {
+      case 'player': {
+        const r = a.pokemon_name.localeCompare(b.pokemon_name, undefined, { sensitivity: 'base' })
+        return dir === 'asc' ? r : -r
+      }
+      case 'purchased':
+        return cmpNullableNum(
+          a.purchase_price != null ? Number(a.purchase_price) : null,
+          b.purchase_price != null ? Number(b.purchase_price) : null,
+          dir,
+          nullsLast,
+        )
+      case 'est_low':
+        return cmpNullableNum(
+          a.value_low != null ? Number(a.value_low) : null,
+          b.value_low != null ? Number(b.value_low) : null,
+          dir,
+          nullsLast,
+        )
+      case 'est_mid':
+        return cmpNullableNum(
+          a.current_value != null ? Number(a.current_value) : null,
+          b.current_value != null ? Number(b.current_value) : null,
+          dir,
+          nullsLast,
+        )
+      case 'est_high':
+        return cmpNullableNum(
+          a.value_high != null ? Number(a.value_high) : null,
+          b.value_high != null ? Number(b.value_high) : null,
+          dir,
+          nullsLast,
+        )
+      case 'confidence': {
+        const diff = confidenceRank(a.confidence) - confidenceRank(b.confidence)
+        return dir === 'asc' ? diff : -diff
+      }
+      case 'trend': {
+        const diff = trendRank(a.trend) - trendRank(b.trend)
+        return dir === 'asc' ? diff : -diff
+      }
+      case 'gain_pct':
+        return cmpNullableNum(pokemonGainPercent(a), pokemonGainPercent(b), dir, nullsLast)
+      case 'last_updated': {
+        const ta = a.last_updated ? new Date(a.last_updated).getTime() : NaN
+        const tb = b.last_updated ? new Date(b.last_updated).getTime() : NaN
+        const va = Number.isFinite(ta) ? ta : null
+        const vb = Number.isFinite(tb) ? tb : null
+        return cmpNullableNum(va, vb, dir, nullsLast)
+      }
+      default:
+        return 0
+    }
+  })
+  return next
+}
+
 function ConfidenceBadgeCell ({ confidence }: { confidence: string | null }) {
   const c = (confidence ?? '').toLowerCase()
   if (c === 'high') {
@@ -227,6 +300,89 @@ function GainLossCell ({ c }: { c: Card }) {
   )
 }
 
+function GainLossCellPokemon ({ c }: { c: PokemonCard }) {
+  const d = pokemonGainDollars(c)
+  const p = pokemonGainPercent(c)
+  const paid = c.purchase_price != null ? Number(c.purchase_price) : null
+  const est = c.current_value != null ? Number(c.current_value) : null
+
+  if (paid != null && est != null && d != null && p != null) {
+    const pos = d >= 0
+    return (
+      <div className="text-right text-[11px] leading-snug">
+        <div className="text-zinc-500">
+          Paid {money.format(paid)} → Est. {money.format(est)}
+        </div>
+        <div className={[pos ? 'text-slab-teal' : 'text-red-400', 'mt-0.5 font-semibold tabular-nums'].join(' ')}>
+          {d >= 0 ? '+' : ''}
+          {money.format(d)}
+          <span className="ml-1 font-normal text-zinc-500 tabular-nums">{pct.format(p / 100)}</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (d == null || p == null) {
+    return <span className="text-zinc-500">—</span>
+  }
+  const pos = d >= 0
+  return (
+    <div className="text-right tabular-nums">
+      <div className={[pos ? 'text-slab-teal' : 'text-red-400', 'font-medium'].join(' ')}>
+        {d >= 0 ? '+' : ''}
+        {money.format(d)}
+      </div>
+      <div className="text-[11px] text-zinc-500">{pct.format(p / 100)}</div>
+    </div>
+  )
+}
+
+function PokemonDetailsCell ({
+  c,
+  onViewImage,
+}: {
+  c: PokemonCard
+  onViewImage: () => void
+}) {
+  const thumb =
+    c.image_front_url?.trim() || c.image_back_url?.trim() || null
+  const lang = c.language === 'jp' ? 'JP' : 'EN'
+  const sub = [c.set_name?.trim() || null, c.card_number ? `#${c.card_number}` : null]
+    .filter(Boolean)
+    .join(' · ')
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      {thumb ? (
+        <button
+          type="button"
+          onClick={onViewImage}
+          className="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-800/80 ring-1 ring-zinc-700/80 transition hover:ring-2 hover:ring-slab-teal/40"
+          aria-label={`View ${c.pokemon_name} photos`}
+        >
+          <img
+            src={thumb}
+            alt=""
+            className="h-full w-full object-cover object-top"
+            loading="lazy"
+          />
+        </button>
+      ) : (
+        <div className="flex h-14 w-10 shrink-0 items-center justify-center rounded-md bg-zinc-800/80 text-[10px] font-bold text-zinc-400 ring-1 ring-zinc-700/80">
+          PK
+        </div>
+      )}
+      <div className="min-w-0">
+        <p className="font-medium text-white">{c.pokemon_name}</p>
+        {sub && <p className="mt-0.5 truncate text-[11px] text-zinc-500" title={sub}>{sub}</p>}
+        <p className="text-[11px] text-zinc-500">
+          {lang} · {formatPokemonGradeLine(c)}
+        </p>
+        <PokemonCardCompLinks card={c} className="mt-1.5" />
+      </div>
+    </div>
+  )
+}
+
 function CardDetailsCell ({
   c,
   onViewImage,
@@ -284,7 +440,9 @@ export function MarketValuesPage () {
   const { user, session } = useAuth()
   const { profile, loading: profileLoading } = useUserProfile(user?.id)
   const [gateCheckout, setGateCheckout] = useState(false)
+  const [marketTab, setMarketTab] = useState<MarketTab>('sports')
   const [cards, setCards] = useState<Card[]>([])
+  const [pokemonCards, setPokemonCards] = useState<PokemonCard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshingValues, setRefreshingValues] = useState(false)
@@ -292,16 +450,12 @@ export function MarketValuesPage () {
   const [estimateDone, setEstimateDone] = useState<string | null>(null)
   const [refreshingIds, setRefreshingIds] = useState<Record<string, boolean>>({})
   const [imageModalCard, setImageModalCard] = useState<Card | null>(null)
+  const [imageModalPokemon, setImageModalPokemon] = useState<PokemonCard | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('gain_pct')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  const loadCards = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!user) {
-      setLoading(false)
-      return
-    }
-    setError(null)
-    if (!opts?.silent) setLoading(true)
+  const loadSportsCards = useCallback(async () => {
+    if (!user) return
     const { data, error: cardsError } = await supabase
       .from('cards')
       .select('*')
@@ -314,52 +468,109 @@ export function MarketValuesPage () {
     } else {
       setCards((data ?? []) as Card[])
     }
-    setLoading(false)
   }, [user])
+
+  const loadPokemonCards = useCallback(async () => {
+    if (!user) return
+    const { data, error: pokeError } = await supabase
+      .from('pokemon_cards')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (pokeError) {
+      setError(pokeError.message)
+      setPokemonCards([])
+    } else {
+      setPokemonCards((data ?? []) as PokemonCard[])
+    }
+  }, [user])
+
+  const loadAll = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!user) {
+        setLoading(false)
+        return
+      }
+      if (!opts?.silent) {
+        setLoading(true)
+        setError(null)
+      }
+      await Promise.all([loadSportsCards(), loadPokemonCards()])
+      if (!opts?.silent) setLoading(false)
+    },
+    [user, loadSportsCards, loadPokemonCards],
+  )
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadCards()
+      void loadAll()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [loadCards])
+  }, [loadAll])
 
   useEffect(() => {
     if (!user) return
     const channel = supabase
-      .channel(`market-values-cards-${user.id}`)
+      .channel(`market-values-${user.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'cards', filter: `user_id=eq.${user.id}` },
         () => {
-          void loadCards({ silent: true })
+          void loadSportsCards()
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'pokemon_cards', filter: `user_id=eq.${user.id}` },
+        () => {
+          void loadPokemonCards()
         },
       )
       .subscribe()
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [user, loadCards])
+  }, [user, loadSportsCards, loadPokemonCards])
 
   useEffect(() => {
     document.title = 'Market Values — SlabBook'
   }, [])
 
-  const metrics = useMemo(() => computePortfolioMetrics(cards), [cards])
+  const sportsMetrics = useMemo(() => computePortfolioMetrics(cards), [cards])
+  const pokemonMetrics = useMemo(() => computePokemonPortfolioMetrics(pokemonCards), [pokemonCards])
+  const metrics = marketTab === 'sports' ? sportsMetrics : pokemonMetrics
+
   const sortedCards = useMemo(
     () => sortCardsMarket(cards, sortKey, sortDir),
     [cards, sortKey, sortDir],
   )
+  const sortedPokemon = useMemo(
+    () => sortPokemonMarket(pokemonCards, sortKey, sortDir),
+    [pokemonCards, sortKey, sortDir],
+  )
+
+  const activeList = marketTab === 'sports' ? cards : pokemonCards
+  const sortedActive = marketTab === 'sports' ? sortedCards : sortedPokemon
 
   const estimatedCount = useMemo(
-    () => cards.filter((c) => c.current_value != null).length,
-    [cards],
+    () => activeList.filter((c) => c.current_value != null).length,
+    [activeList],
   )
-  const hasNoEstimates = cards.length > 0 && estimatedCount === 0
+  const hasNoEstimates = activeList.length > 0 && estimatedCount === 0
 
   const gainPositive = metrics.gainLossDollars >= 0
   const gainPctStr =
     metrics.gainLossPercent != null ? pct.format(metrics.gainLossPercent / 100) : '—'
+
+  const bestPerformerLabel =
+    marketTab === 'sports'
+      ? (sportsMetrics.bestPerformer?.card.player_name ?? null)
+      : (pokemonMetrics.bestPerformer?.card.pokemon_name ?? null)
+  const bestPerformerGainPct =
+    marketTab === 'sports'
+      ? sportsMetrics.bestPerformer?.gainPercent
+      : pokemonMetrics.bestPerformer?.gainPercent
 
   function toggleSort (key: SortKey) {
     if (key === sortKey) {
@@ -376,10 +587,10 @@ export function MarketValuesPage () {
   }
 
   async function estimateAllValues () {
-    if (!user || cards.length === 0) return
+    if (!user || activeList.length === 0) return
     setError(null)
     setEstimateDone(null)
-    const targets = cards.filter((c) => isEstimateStale(c))
+    const targets = activeList.filter((c) => isEstimateStale(c))
     if (targets.length === 0) {
       setEstimateDone('All card values are fresh (updated within 48 hours).')
       window.setTimeout(() => setEstimateDone(null), 5000)
@@ -398,18 +609,28 @@ export function MarketValuesPage () {
 
       for (let i = 0; i < targets.length; i++) {
         const id = targets[i].id
-        const est = await getCardValue({ id }, session.access_token, { force_refresh: false })
-        if (est.error) {
-          throw new Error(est.error)
+        if (marketTab === 'sports') {
+          const est = await getCardValue({ id }, session.access_token, { force_refresh: false })
+          if (est.error) {
+            throw new Error(est.error)
+          }
+          setCards((prev) => prev.map((c) => (c.id === id ? mergeEstimateIntoCard(c, est) : c)))
+        } else {
+          const est = await getPokemonCardValue({ id }, session.access_token, { force_refresh: false })
+          if (est.error) {
+            throw new Error(est.error)
+          }
+          setPokemonCards((prev) =>
+            prev.map((c) => (c.id === id ? mergeEstimateIntoPokemonCard(c, est) : c)),
+          )
         }
-        setCards((prev) => prev.map((c) => (c.id === id ? mergeEstimateIntoCard(c, est) : c)))
         setEstimateProgress({ current: i + 1, total: targets.length })
         if (i < targets.length - 1) {
           await sleep(1000)
         }
       }
 
-      await loadCards({ silent: true })
+      await loadAll({ silent: true })
       setEstimateDone('All values updated!')
       window.setTimeout(() => setEstimateDone(null), 6000)
     } catch (err) {
@@ -420,7 +641,7 @@ export function MarketValuesPage () {
     }
   }
 
-  async function refreshSingle (card: Card) {
+  async function refreshSingleSports (card: Card) {
     setError(null)
     setRefreshingIds((prev) => ({ ...prev, [card.id]: true }))
     try {
@@ -435,6 +656,34 @@ export function MarketValuesPage () {
         throw new Error(est.error)
       }
       setCards((prev) => prev.map((c) => (c.id === card.id ? mergeEstimateIntoCard(c, est) : c)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to refresh estimate.')
+    } finally {
+      setRefreshingIds((prev) => {
+        const next = { ...prev }
+        delete next[card.id]
+        return next
+      })
+    }
+  }
+
+  async function refreshSinglePokemon (card: PokemonCard) {
+    setError(null)
+    setRefreshingIds((prev) => ({ ...prev, [card.id]: true }))
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('Missing auth session. Please sign in again.')
+      }
+      const est = await getPokemonCardValue(card, session.access_token, { force_refresh: true })
+      if (est.error) {
+        throw new Error(est.error)
+      }
+      setPokemonCards((prev) =>
+        prev.map((c) => (c.id === card.id ? mergeEstimateIntoPokemonCard(c, est) : c)),
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to refresh estimate.')
     } finally {
@@ -542,16 +791,45 @@ export function MarketValuesPage () {
           <p className="rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-4 py-2.5 text-xs leading-relaxed text-amber-100/85">
             {MARKET_VALUES_BANNER}
           </p>
+          <nav
+            className="flex flex-wrap gap-2 border-b border-[var(--color-border-subtle)] pb-3"
+            aria-label="Market values by category"
+          >
+            <button
+              type="button"
+              onClick={() => setMarketTab('sports')}
+              className={[
+                'rounded-lg px-3 py-2 text-sm font-medium transition',
+                marketTab === 'sports'
+                  ? 'bg-slab-teal/20 text-slab-teal-muted ring-1 ring-slab-teal/30'
+                  : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+              ].join(' ')}
+            >
+              Sports cards
+            </button>
+            <button
+              type="button"
+              onClick={() => setMarketTab('pokemon')}
+              className={[
+                'rounded-lg px-3 py-2 text-sm font-medium transition',
+                marketTab === 'pokemon'
+                  ? 'bg-slab-teal/20 text-slab-teal-muted ring-1 ring-slab-teal/30'
+                  : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+              ].join(' ')}
+            >
+              Pokémon TCG
+            </button>
+          </nav>
         </div>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:items-end">
           <button
             type="button"
             onClick={() => void estimateAllValues()}
-            disabled={refreshingValues || cards.length === 0}
+            disabled={refreshingValues || activeList.length === 0}
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-slab-teal-light disabled:opacity-50 sm:w-auto"
           >
             {refreshingValues && estimateProgress
-              ? `Estimating ${estimateProgress.current} of ${estimateProgress.total} cards…`
+              ? `Estimating ${estimateProgress.current} of ${estimateProgress.total} ${marketTab === 'pokemon' ? 'Pokémon cards' : 'cards'}…`
               : refreshingValues
                 ? 'Working…'
                 : 'Estimate All Values'}
@@ -583,9 +861,9 @@ export function MarketValuesPage () {
         </div>
       )}
 
-      {cards.length === 0 && !loading && (
+      {marketTab === 'sports' && cards.length === 0 && !loading && (
         <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-12 text-center">
-          <p className="text-lg font-medium text-white">No cards yet</p>
+          <p className="text-lg font-medium text-white">No sports cards yet</p>
           <p className="mt-2 text-sm text-zinc-400">
             Add cards in your collection to see market value estimates here.
           </p>
@@ -594,6 +872,21 @@ export function MarketValuesPage () {
             className="mt-6 inline-flex rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light"
           >
             Go to Collection
+          </Link>
+        </div>
+      )}
+
+      {marketTab === 'pokemon' && pokemonCards.length === 0 && !loading && (
+        <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] px-6 py-12 text-center">
+          <p className="text-lg font-medium text-white">No Pokémon cards yet</p>
+          <p className="mt-2 text-sm text-zinc-400">
+            Add Pokémon cards in your collection to see market value estimates here.
+          </p>
+          <Link
+            to="/dashboard/collection/pokemon"
+            className="mt-6 inline-flex rounded-lg bg-slab-teal px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-slab-teal-light"
+          >
+            Go to Pokémon collection
           </Link>
         </div>
       )}
@@ -615,7 +908,7 @@ export function MarketValuesPage () {
         </div>
       )}
 
-      {cards.length > 0 && (
+      {activeList.length > 0 && (
         <>
           <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] p-3 sm:p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
@@ -641,13 +934,13 @@ export function MarketValuesPage () {
               <SummaryStat
                 label="Best performer"
                 sub={
-                  metrics.bestPerformer ? (
+                  bestPerformerGainPct != null ? (
                     <span
                       className={
-                        metrics.bestPerformer.gainPercent >= 0 ? 'text-slab-teal/90' : 'text-red-400/90'
+                        bestPerformerGainPct >= 0 ? 'text-slab-teal/90' : 'text-red-400/90'
                       }
                     >
-                      {pct.format(metrics.bestPerformer.gainPercent / 100)} vs cost
+                      {pct.format(bestPerformerGainPct / 100)} vs cost
                     </span>
                   ) : (
                     <span>Needs paid + estimate</span>
@@ -656,9 +949,9 @@ export function MarketValuesPage () {
               >
                 {loading ? (
                   '—'
-                ) : metrics.bestPerformer ? (
-                  <span className="truncate text-zinc-100" title={metrics.bestPerformer.card.player_name}>
-                    {metrics.bestPerformer.card.player_name}
+                ) : bestPerformerLabel ? (
+                  <span className="truncate text-zinc-100" title={bestPerformerLabel}>
+                    {bestPerformerLabel}
                   </span>
                 ) : (
                   <span className="text-zinc-500">—</span>
@@ -672,7 +965,11 @@ export function MarketValuesPage () {
               <table className="w-full min-w-[1100px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-[var(--color-border-subtle)] text-xs">
-                    <SortTh k="player" label="Player / card" className="px-3 py-3 lg:px-4" />
+                    <SortTh
+                      k="player"
+                      label={marketTab === 'pokemon' ? 'Pokémon / card' : 'Player / card'}
+                      className="px-3 py-3 lg:px-4"
+                    />
                     <SortTh k="purchased" label="Purchased" className="px-3 py-3 text-right lg:px-4" />
                     <SortTh k="est_low" label="Est. low" className="px-3 py-3 text-right lg:px-4" />
                     <SortTh k="est_mid" label="Est. value" className="px-3 py-3 text-right lg:px-4" />
@@ -687,92 +984,203 @@ export function MarketValuesPage () {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-border-subtle)]">
-                  {sortedCards.map((c) => {
-                    const missingEst = c.current_value == null
-                    const note = c.value_note?.trim() ?? ''
-                    const busy = Boolean(refreshingIds[c.id])
-                    return (
-                      <tr
-                        key={c.id}
-                        className={[
-                          'text-zinc-200',
-                          missingEst ? 'bg-amber-500/[0.04]' : '',
-                          busy ? 'bg-slab-teal/[0.06] shadow-[inset_3px_0_0_0_rgba(45,212,191,0.55)]' : '',
-                          'hover:bg-white/[0.03]',
-                        ].join(' ')}
-                      >
-                        <td className="px-3 py-3 lg:px-4">
-                          <CardDetailsCell c={c} onViewImage={() => setImageModalCard(c)} />
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums text-zinc-300 lg:px-4">
-                          {c.purchase_price != null ? money.format(Number(c.purchase_price)) : '—'}
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums lg:px-4">
-                          {c.value_low != null ? money.format(Number(c.value_low)) : '—'}
-                        </td>
-                        <td className="px-3 py-3 text-right lg:px-4">
-                          {c.current_value != null ? (
-                            <span className="text-base font-bold tabular-nums text-white">
-                              {money.format(Number(c.current_value))}
-                            </span>
-                          ) : (
-                            <span className="text-zinc-500">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums lg:px-4">
-                          {c.value_high != null ? money.format(Number(c.value_high)) : '—'}
-                        </td>
-                        <td className="px-3 py-3 lg:px-4">
-                          {missingEst ? (
-                            <span className="inline-flex rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-200/80">
-                              Not estimated
-                            </span>
-                          ) : (
-                            <ConfidenceBadgeCell confidence={c.confidence} />
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-lg lg:px-4">
-                          {missingEst ? <span className="text-zinc-600">—</span> : <TrendCell trend={c.trend} />}
-                        </td>
-                        <td className="px-3 py-3 lg:px-4">
-                          <GainLossCell c={c} />
-                        </td>
-                        <td className="px-3 py-3 text-xs text-zinc-500 lg:px-4">
-                          {formatRelativeTime(c.last_updated)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-3 text-right lg:px-4">
-                          <button
-                            type="button"
-                            onClick={() => void refreshSingle(c)}
-                            disabled={busy}
-                            className="inline-flex rounded-md p-2 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
-                            title="Re-estimate this card"
-                            aria-label="Re-estimate this card"
-                          >
-                            {busy ? (
-                              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-slab-teal" />
-                            ) : (
-                              <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!note}
+                  {marketTab === 'sports'
+                    ? sortedActive.map((c) => {
+                        const card = c as Card
+                        const missingEst = card.current_value == null
+                        const note = card.value_note?.trim() ?? ''
+                        const busy = Boolean(refreshingIds[card.id])
+                        return (
+                          <tr
+                            key={card.id}
                             className={[
-                              'ml-1 inline-flex rounded-md p-2 align-middle',
-                              note
-                                ? 'cursor-help text-zinc-400 hover:bg-white/5 hover:text-white'
-                                : 'cursor-not-allowed text-zinc-700 opacity-40',
+                              'text-zinc-200',
+                              missingEst ? 'bg-amber-500/[0.04]' : '',
+                              busy
+                                ? 'bg-slab-teal/[0.06] shadow-[inset_3px_0_0_0_rgba(45,212,191,0.55)]'
+                                : '',
+                              'hover:bg-white/[0.03]',
                             ].join(' ')}
-                            title={note || 'No reasoning available yet'}
-                            aria-label={note ? 'Show AI reasoning (tooltip)' : 'No reasoning available yet'}
                           >
-                            <MessageCircle className="h-4 w-4" strokeWidth={1.75} />
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                            <td className="px-3 py-3 lg:px-4">
+                              <CardDetailsCell
+                                c={card}
+                                onViewImage={() => setImageModalCard(card)}
+                              />
+                            </td>
+                            <td className="px-3 py-3 text-right tabular-nums text-zinc-300 lg:px-4">
+                              {card.purchase_price != null ? money.format(Number(card.purchase_price)) : '—'}
+                            </td>
+                            <td className="px-3 py-3 text-right tabular-nums lg:px-4">
+                              {card.value_low != null ? money.format(Number(card.value_low)) : '—'}
+                            </td>
+                            <td className="px-3 py-3 text-right lg:px-4">
+                              {card.current_value != null ? (
+                                <span className="text-base font-bold tabular-nums text-white">
+                                  {money.format(Number(card.current_value))}
+                                </span>
+                              ) : (
+                                <span className="text-zinc-500">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-right tabular-nums lg:px-4">
+                              {card.value_high != null ? money.format(Number(card.value_high)) : '—'}
+                            </td>
+                            <td className="px-3 py-3 lg:px-4">
+                              {missingEst ? (
+                                <span className="inline-flex rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-200/80">
+                                  Not estimated
+                                </span>
+                              ) : (
+                                <ConfidenceBadgeCell confidence={card.confidence} />
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-lg lg:px-4">
+                              {missingEst ? (
+                                <span className="text-zinc-600">—</span>
+                              ) : (
+                                <TrendCell trend={card.trend} />
+                              )}
+                            </td>
+                            <td className="px-3 py-3 lg:px-4">
+                              <GainLossCell c={card} />
+                            </td>
+                            <td className="px-3 py-3 text-xs text-zinc-500 lg:px-4">
+                              {formatRelativeTime(card.last_updated)}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-3 text-right lg:px-4">
+                              <button
+                                type="button"
+                                onClick={() => void refreshSingleSports(card)}
+                                disabled={busy}
+                                className="inline-flex rounded-md p-2 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
+                                title="Re-estimate this card"
+                                aria-label="Re-estimate this card"
+                              >
+                                {busy ? (
+                                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-slab-teal" />
+                                ) : (
+                                  <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!note}
+                                className={[
+                                  'ml-1 inline-flex rounded-md p-2 align-middle',
+                                  note
+                                    ? 'cursor-help text-zinc-400 hover:bg-white/5 hover:text-white'
+                                    : 'cursor-not-allowed text-zinc-700 opacity-40',
+                                ].join(' ')}
+                                title={note || 'No reasoning available yet'}
+                                aria-label={
+                                  note ? 'Show AI reasoning (tooltip)' : 'No reasoning available yet'
+                                }
+                              >
+                                <MessageCircle className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    : sortedActive.map((c) => {
+                        const card = c as PokemonCard
+                        const missingEst = card.current_value == null
+                        const note = card.value_note?.trim() ?? ''
+                        const busy = Boolean(refreshingIds[card.id])
+                        return (
+                          <tr
+                            key={card.id}
+                            className={[
+                              'text-zinc-200',
+                              missingEst ? 'bg-amber-500/[0.04]' : '',
+                              busy
+                                ? 'bg-slab-teal/[0.06] shadow-[inset_3px_0_0_0_rgba(45,212,191,0.55)]'
+                                : '',
+                              'hover:bg-white/[0.03]',
+                            ].join(' ')}
+                          >
+                            <td className="px-3 py-3 lg:px-4">
+                              <PokemonDetailsCell
+                                c={card}
+                                onViewImage={() => setImageModalPokemon(card)}
+                              />
+                            </td>
+                            <td className="px-3 py-3 text-right tabular-nums text-zinc-300 lg:px-4">
+                              {card.purchase_price != null ? money.format(Number(card.purchase_price)) : '—'}
+                            </td>
+                            <td className="px-3 py-3 text-right tabular-nums lg:px-4">
+                              {card.value_low != null ? money.format(Number(card.value_low)) : '—'}
+                            </td>
+                            <td className="px-3 py-3 text-right lg:px-4">
+                              {card.current_value != null ? (
+                                <span className="text-base font-bold tabular-nums text-white">
+                                  {money.format(Number(card.current_value))}
+                                </span>
+                              ) : (
+                                <span className="text-zinc-500">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-right tabular-nums lg:px-4">
+                              {card.value_high != null ? money.format(Number(card.value_high)) : '—'}
+                            </td>
+                            <td className="px-3 py-3 lg:px-4">
+                              {missingEst ? (
+                                <span className="inline-flex rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-200/80">
+                                  Not estimated
+                                </span>
+                              ) : (
+                                <ConfidenceBadgeCell confidence={card.confidence} />
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-lg lg:px-4">
+                              {missingEst ? (
+                                <span className="text-zinc-600">—</span>
+                              ) : (
+                                <TrendCell trend={card.trend} />
+                              )}
+                            </td>
+                            <td className="px-3 py-3 lg:px-4">
+                              <GainLossCellPokemon c={card} />
+                            </td>
+                            <td className="px-3 py-3 text-xs text-zinc-500 lg:px-4">
+                              {formatRelativeTime(card.last_updated)}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-3 text-right lg:px-4">
+                              <button
+                                type="button"
+                                onClick={() => void refreshSinglePokemon(card)}
+                                disabled={busy}
+                                className="inline-flex rounded-md p-2 text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-50"
+                                title="Re-estimate this card"
+                                aria-label="Re-estimate this card"
+                              >
+                                {busy ? (
+                                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-slab-teal" />
+                                ) : (
+                                  <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!note}
+                                className={[
+                                  'ml-1 inline-flex rounded-md p-2 align-middle',
+                                  note
+                                    ? 'cursor-help text-zinc-400 hover:bg-white/5 hover:text-white'
+                                    : 'cursor-not-allowed text-zinc-700 opacity-40',
+                                ].join(' ')}
+                                title={note || 'No reasoning available yet'}
+                                aria-label={
+                                  note ? 'Show AI reasoning (tooltip)' : 'No reasoning available yet'
+                                }
+                              >
+                                <MessageCircle className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
                 </tbody>
               </table>
             </div>
@@ -790,7 +1198,13 @@ export function MarketValuesPage () {
         onClose={() => setImageModalCard(null)}
         money={money}
         refreshing={Boolean(imageModalCard && refreshingIds[imageModalCard.id])}
-        onRefreshValue={(c) => void refreshSingle(c)}
+        onRefreshValue={(c) => void refreshSingleSports(c)}
+      />
+
+      <PokemonImageModal
+        card={imageModalPokemon}
+        open={imageModalPokemon != null}
+        onClose={() => setImageModalPokemon(null)}
       />
     </div>
   )

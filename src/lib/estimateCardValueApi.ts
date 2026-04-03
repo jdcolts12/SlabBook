@@ -1,4 +1,5 @@
 import type { Card } from '../types/card'
+import type { PokemonCard } from '../types/pokemonCard'
 
 export type EstimateCardValueResponse = {
   cached?: boolean
@@ -17,7 +18,7 @@ export type EstimateCardValueResponse = {
 export async function postEstimateCardValue (
   accessToken: string,
   cardId: string,
-  opts?: { force_refresh?: boolean },
+  opts?: { force_refresh?: boolean; card_kind?: 'sports' | 'pokemon' },
 ): Promise<EstimateCardValueResponse> {
   const res = await fetch('/api/estimate-card-value', {
     method: 'POST',
@@ -28,6 +29,7 @@ export async function postEstimateCardValue (
     body: JSON.stringify({
       card_id: cardId,
       force_refresh: opts?.force_refresh === true,
+      ...(opts?.card_kind === 'pokemon' ? { card_kind: 'pokemon' } : {}),
     }),
   })
 
@@ -73,6 +75,23 @@ export async function postEstimateCardValue (
 }
 
 export function mergeEstimateIntoCard (card: Card, est: EstimateCardValueResponse): Card {
+  return {
+    ...card,
+    current_value: est.current_value,
+    value_low: est.value_low,
+    value_high: est.value_high,
+    confidence: est.confidence,
+    trend: est.trend,
+    value_note: est.value_note,
+    pricing_source: est.pricing_source,
+    last_updated: est.last_updated,
+  }
+}
+
+export function mergeEstimateIntoPokemonCard (
+  card: PokemonCard,
+  est: EstimateCardValueResponse,
+): PokemonCard {
   return {
     ...card,
     current_value: est.current_value,

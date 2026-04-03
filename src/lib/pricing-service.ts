@@ -7,6 +7,7 @@
 
 import { postEstimateCardValue, type EstimateCardValueResponse } from './estimateCardValueApi'
 import type { Card } from '../types/card'
+import type { PokemonCard } from '../types/pokemonCard'
 
 export async function getCardValue (
   card: Pick<Card, 'id'>,
@@ -14,4 +15,12 @@ export async function getCardValue (
   opts?: { force_refresh?: boolean },
 ): Promise<EstimateCardValueResponse> {
   return postEstimateCardValue(accessToken, card.id, opts)
+}
+
+export async function getPokemonCardValue (
+  card: Pick<PokemonCard, 'id'>,
+  accessToken: string,
+  opts?: { force_refresh?: boolean },
+): Promise<EstimateCardValueResponse> {
+  return postEstimateCardValue(accessToken, card.id, { ...opts, card_kind: 'pokemon' })
 }

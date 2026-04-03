@@ -98,6 +98,13 @@ create table if not exists public.pokemon_cards (
   purchase_price numeric(12, 2),
   purchase_date date,
   current_value numeric(12, 2),
+  value_low numeric(12, 2),
+  value_high numeric(12, 2),
+  confidence text,
+  trend text,
+  value_note text,
+  pricing_source text,
+  last_updated timestamptz,
   created_at timestamptz not null default now ()
 );
 
