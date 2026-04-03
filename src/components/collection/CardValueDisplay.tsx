@@ -110,8 +110,14 @@ export function CardValueDisplay ({
         <p className="mt-0.5 text-[9px] text-amber-400/90">Demo estimate</p>
       )}
       {showAttribution &&
-        (card.pricing_source === 'sportscardspro_web' || card.pricing_source === 'sportscardspro') && (
-        <p className="mt-0.5 text-[9px] text-zinc-600">SportsCardsPro</p>
+        (card.pricing_source === 'market_web' ||
+          card.pricing_source === 'sportscardspro_web' ||
+          card.pricing_source === 'sportscardspro') && (
+        <p className="mt-0.5 text-[9px] text-zinc-600">
+          {card.pricing_source === 'sportscardspro_web' || card.pricing_source === 'sportscardspro'
+            ? 'SportsCardsPro'
+            : 'Live market comps'}
+        </p>
       )}
       {showAttribution && card.pricing_source === 'claude_estimate' && (
         <p className="mt-0.5 text-[9px] text-zinc-600">Model estimate (no web search)</p>

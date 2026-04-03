@@ -164,20 +164,48 @@ function fakeCardEstimate (card: CardEstimateInput): CardEstimateResult {
   }
 }
 
-const SYSTEM_PROMPT = `Card analyst for sports trading cards OR Pokémon cards.
+type EstimateWebKind = 'sports' | 'pokemon'
 
-If \`sport\` is null/empty, treat the card as Pokémon.
-If \`sport\` is set (NFL, NBA, MLB, NHL, Soccer, MMA, WNBA, or any other league label), treat it as a sports card and use the league + player/set context in your reasoning.
+const PRICING_RULES_SHARED = `You are a conservative market-valuation assistant for collectible trading cards.
 
-When web_search is available, results are restricted to SportsCardsPro.com. Use 1–3 searches to find the best-matching card page (price guide, completed auction / market sections, or product pages). Ground USD low/mid/high in dollar amounts you actually see on those pages for the matching grade/raw condition. If SportsCardsPro has no clear match, say so in reasoning, widen the range, and lower confidence. Do not invent exact prices not supported by retrieved pages.`
+Accuracy (non-negotiable):
+- Never fabricate precise dollar amounts. Low/mid/high must reflect retrieved web evidence when web_search runs; if search is off or comps are thin, use a deliberately wide range and set confidence to low or medium.
+- "mid" = your best single fair-value estimate for THIS exact card (matching set/variant/grade/raw quality). "low"/"high" = plausible band without outlier auctions; widen when guides disagree or the match is fuzzy.
+- If details look inconsistent (wrong parallel, reprint vs vintage, ambiguous set), say so in reasoning and lower confidence.
+- Prefer recent sale/list signals over stale catalog prices when they conflict.
+- Call submit_card_estimate exactly once after you finish any web_search turns.`
+
+function pricingSystemPrompt (kind: EstimateWebKind): string {
+  if (kind === 'pokemon') {
+    return `${PRICING_RULES_SHARED}
+
+Pokémon TCG mode:
+- Respect language (EN vs JP prints often differ a lot in value). Use set name, collector card number, and variation (holo, reverse, subset, promo, etc.).
+- Graded: price for that slab company + numeric grade. Raw: anchor to the stated condition tier.
+- With web_search, use only the allowed domains (typically TCGPlayer, PriceCharting, eBay). Find pages that match this exact print and grade/raw, then ground USD figures in prices you actually see. If you only find loose parallels, say that and widen the range.`
+  }
+  return `${PRICING_RULES_SHARED}
+
+Sports card mode (NFL, NBA, MLB, NHL, Soccer, MMA, WNBA, etc.):
+- Use player, year, set, card number, variation, and grade/raw condition together — do not price a different parallel or insert.
+- With web_search, allowed domains are usually SportsCardsPro.com. Find the best-matching guide or product page and ground USD in visible numbers for the matching grade. If there is no clear match, say so, widen the range, and lower confidence.`
+}
 
 /** Anthropic server tool — executed by Anthropic (see web search tool docs) */
-function getWebSearchTool (): Record<string, unknown> {
+function getWebSearchTool (kind: EstimateWebKind): Record<string, unknown> {
   const rawMax = process.env.PRICING_WEB_SEARCH_MAX_USES?.trim()
-  const maxUses = rawMax ? Number.parseInt(rawMax, 10) : 3
+  const rawPokemonMax = process.env.PRICING_WEB_SEARCH_MAX_USES_POKEMON?.trim()
+  let maxUses = rawMax ? Number.parseInt(rawMax, 10) : 3
+  if (kind === 'pokemon' && rawPokemonMax) {
+    const n = Number.parseInt(rawPokemonMax, 10)
+    if (Number.isFinite(n) && n > 0) maxUses = n
+  } else if (kind === 'pokemon' && !rawMax) {
+    /** Pokémon comps often need an extra query (set page + marketplace + solds). */
+    maxUses = 4
+  }
   const tool: Record<string, unknown> = {
     name: 'web_search',
-    /** Fewer searches = lower input TPM (org rate limits). Override via PRICING_WEB_SEARCH_MAX_USES. */
+    /** Fewer searches = lower input TPM (org rate limits). Override via PRICING_WEB_SEARCH_MAX_USES (+ optional _POKEMON). */
     max_uses: Number.isFinite(maxUses) && maxUses > 0 ? Math.min(10, maxUses) : 3,
   }
   const ver = process.env.PRICING_WEB_SEARCH_VERSION?.trim()
@@ -189,14 +217,27 @@ function getWebSearchTool (): Record<string, unknown> {
     tool.type = 'web_search_20250305'
   }
   const domains = process.env.PRICING_WEB_SEARCH_ALLOWED_DOMAINS?.trim()
+  const pokemonDomains = process.env.PRICING_WEB_SEARCH_POKEMON_DOMAINS?.trim()
   if (domains) {
     tool.allowed_domains = domains.split(',').map((s) => s.trim()).filter(Boolean)
   } else if (process.env.PRICING_WEB_SEARCH_EBAY_ONLY === '1') {
-    tool.allowed_domains = ['ebay.com']
+    tool.allowed_domains = ['ebay.com', 'www.ebay.com']
   } else if (process.env.PRICING_WEB_SEARCH_UNRESTRICTED === '1') {
     /* full web — legacy / advanced */
+  } else if (kind === 'pokemon') {
+    if (pokemonDomains) {
+      tool.allowed_domains = pokemonDomains.split(',').map((s) => s.trim()).filter(Boolean)
+    } else {
+      tool.allowed_domains = [
+        'tcgplayer.com',
+        'www.tcgplayer.com',
+        'pricecharting.com',
+        'www.pricecharting.com',
+        'ebay.com',
+        'www.ebay.com',
+      ]
+    }
   } else {
-    /** Default: Claude web search only sees SportsCardsPro (no paid API required). */
     tool.allowed_domains = ['sportscardspro.com', 'www.sportscardspro.com']
   }
   return tool
@@ -220,7 +261,8 @@ const SUBMIT_CARD_ESTIMATE_TOOL = {
       },
       reasoning: {
         type: 'string',
-        description: 'One short sentence',
+        description:
+          'One or two short sentences: cite the comp source (e.g. site + rough figures seen) or state why the range is uncertain.',
       },
       trend: {
         type: 'string',
@@ -229,11 +271,15 @@ const SUBMIT_CARD_ESTIMATE_TOOL = {
       },
       data_source: {
         type: 'string',
-        description: 'e.g. SportsCardsPro.com (web) + Claude',
+        description: 'Which pages informed the estimate (domains), e.g. TCGPlayer + PriceCharting (web) + Claude',
       },
     },
     required: ['low', 'mid', 'high', 'confidence', 'reasoning', 'trend'],
   },
+}
+
+function estimateWebKind (card: CardEstimateInput): EstimateWebKind {
+  return card.sport?.trim() ? 'sports' : 'pokemon'
 }
 
 function buildUserPrompt (card: CardEstimateInput): string {
@@ -244,16 +290,19 @@ function buildUserPrompt (card: CardEstimateInput): string {
         : 'Graded (details incomplete)')
     : 'N/A (raw)'
 
-  const cardTypeLine = card.sport ? 'US Sports card' : 'Pokémon card'
+  const kind = estimateWebKind(card)
+  const cardTypeLine = kind === 'sports' ? 'Sports trading card' : 'Pokémon TCG card'
   const langBit =
-    !card.sport && card.language?.trim()
-      ? ` | Lang ${card.language.trim()}`
-      : ''
-  return `Estimate market USD value:
-Player ${card.player_name}${langBit} | Yr ${card.year ?? '?'} | Set ${card.set_name ?? '?'} | #${card.card_number ?? '—'} | Var ${card.variation ?? '—'} | Sport ${card.sport ?? '?'}
+    kind === 'pokemon' && card.language?.trim() ? ` | Lang ${card.language.trim()}` : ''
+  const searchHint =
+    kind === 'pokemon'
+      ? 'If web_search: query Pokémon name + set + collector number + language + grade/raw; use allowed market sites to match this exact print, then submit_card_estimate once. Weak or partial match → wider USD band + lower confidence.'
+      : 'If web_search: 1–3 queries (player, year, set, card #, variation, grade) on allowed sports-card price sites, then submit_card_estimate once. No solid match → wider range + lower confidence.'
+  return `Estimate fair market USD value (not insurance or peak hype):
+Player/character ${card.player_name}${langBit} | Yr ${card.year ?? '?'} | Set ${card.set_name ?? '?'} | #${card.card_number ?? '—'} | Var ${card.variation ?? '—'} | Sport/league ${card.sport ?? '(none — Pokémon)'}
 Card type: ${cardTypeLine}
 Graded ${card.is_graded} | Slab ${gradeLine} | Raw cond ${card.condition ?? '—'}
-If web_search: 1–3 SportsCardsPro-focused queries (player, year, set, card #, grade), then submit_card_estimate once. No clear SCP match → wider range, low confidence.`
+${searchHint}`
 }
 
 function extractJsonFromFencedOrSlice (raw: string): string {
@@ -384,7 +433,7 @@ function normalizeEstimate (parsed: Record<string, unknown>): CardEstimateResult
   const data_source =
     typeof parsed.data_source === 'string' && parsed.data_source.trim()
       ? parsed.data_source.trim()
-      : 'SportsCardsPro.com (web) + Claude'
+      : 'Market comps (web) + Claude'
 
   return {
     low: Math.round(low * 100) / 100,
@@ -537,8 +586,8 @@ function createAnthropicFetchAbort (
 type GetCardValueOk = {
   ok: true
   estimate: CardEstimateResult
-  /** True when the successful path used Anthropic web_search (restricted to SportsCardsPro by default). */
-  usedSportsCardsProWebSearch: boolean
+  /** True when the successful path included Anthropic web_search (domain allowlist varies by sports vs Pokémon). */
+  usedWebSearch: boolean
 }
 
 async function getCardValue (
@@ -560,6 +609,8 @@ async function getCardValueInner (
   anthropicApiKey: string,
   options?: GetCardValueOptions,
 ): Promise<GetCardValueOk | { ok: false; error: string }> {
+  const webKind = estimateWebKind(card)
+  const systemPrompt = pricingSystemPrompt(webKind)
   const userPrompt = buildUserPrompt(card)
   const requestSignal = options?.signal
 
@@ -568,10 +619,15 @@ async function getCardValueInner (
       ? process.env.ANTHROPIC_MODEL.trim()
       : 'claude-sonnet-4-20250514'
 
+  const tempRaw = process.env.PRICING_ESTIMATE_TEMPERATURE?.trim()
+  const parsedTemp = tempRaw ? Number.parseFloat(tempRaw) : Number.NaN
+  const temperature =
+    Number.isFinite(parsedTemp) && parsedTemp >= 0 && parsedTemp <= 1 ? parsedTemp : 0.15
+
   const skipWebSearch = resolveSkipWebSearch(options)
   const useSubmitTool = process.env.PRICING_SKIP_TOOL_USE !== '1'
 
-  const toolsWithWeb = [getWebSearchTool(), SUBMIT_CARD_ESTIMATE_TOOL]
+  const toolsWithWeb = [getWebSearchTool(webKind), SUBMIT_CARD_ESTIMATE_TOOL]
   const toolsSubmitOnly = [SUBMIT_CARD_ESTIMATE_TOOL]
 
   const maxOutWeb = Math.min(
@@ -590,8 +646,8 @@ async function getCardValueInner (
   const bodyTextOnly = {
     model,
     max_tokens: maxOutJson,
-    temperature: 0.2,
-    system: `${SYSTEM_PROMPT} Reply with one JSON object only: low, mid, high, confidence, reasoning, trend, data_source.`,
+    temperature,
+    system: `${systemPrompt} Reply with one JSON object only: low, mid, high, confidence, reasoning, trend, data_source.`,
     messages: [{ role: 'user', content: `${userPrompt}\nJSON only.` }],
   }
 
@@ -739,8 +795,8 @@ async function getCardValueInner (
     const first = await runWithPauseTurn({
       model,
       max_tokens: maxOutWeb,
-      temperature: 0.2,
-      system: SYSTEM_PROMPT,
+      temperature,
+      system: systemPrompt,
       tools: toolsWithWeb,
       messages: [{ role: 'user', content: userPrompt }],
     })
@@ -761,8 +817,8 @@ async function getCardValueInner (
       const second = await runWithPauseTurn({
         model,
         max_tokens: maxOutWeb,
-        temperature: 0.2,
-        system: SYSTEM_PROMPT,
+        temperature,
+        system: systemPrompt,
         tools: toolsSubmitOnly,
         tool_choice: { type: 'tool', name: 'submit_card_estimate' },
         messages: [{ role: 'user', content: userPrompt }],
@@ -776,8 +832,8 @@ async function getCardValueInner (
     const r = await runWithPauseTurn({
       model,
       max_tokens: maxOutFast,
-      temperature: 0.2,
-      system: SYSTEM_PROMPT,
+      temperature,
+      system: systemPrompt,
       tools: toolsSubmitOnly,
       tool_choice: { type: 'tool', name: 'submit_card_estimate' },
       messages: [{ role: 'user', content: userPrompt }],
@@ -834,9 +890,9 @@ async function getCardValueInner (
     }
   }
 
-  const usedSportsCardsProWebSearch = Boolean(completedWithWebSearchTools)
+  const usedWebSearch = Boolean(completedWithWebSearchTools)
 
-  return { ok: true, estimate, usedSportsCardsProWebSearch }
+  return { ok: true, estimate, usedWebSearch }
 }
 
 
@@ -977,6 +1033,7 @@ function rowEstimateCacheFresh (row: {
   const lastAt = row.last_updated ? new Date(row.last_updated).getTime() : 0
   const freshSource =
     row.pricing_source === 'claude_estimate' ||
+    row.pricing_source === 'market_web' ||
     row.pricing_source === 'sportscardspro_web' ||
     row.pricing_source === 'sportscardspro' ||
     row.pricing_source === 'demo_mode'
@@ -1342,9 +1399,9 @@ export default async function handler (req: ApiRequest, res: ApiResponse) {
       wall?.clear()
     }
 
-    const { estimate, usedSportsCardsProWebSearch } = result
+    const { estimate, usedWebSearch } = result
     const nowIso = new Date().toISOString()
-    const pricingSource = usedSportsCardsProWebSearch ? 'sportscardspro_web' : 'claude_estimate'
+    const pricingSource = usedWebSearch ? 'market_web' : 'claude_estimate'
 
     if (instantMode) {
       return jsonOk(res, 200, {
